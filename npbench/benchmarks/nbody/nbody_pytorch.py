@@ -70,10 +70,10 @@ def getEnergy(pos, vel, mass, G):
     return KE, PE
 
 
-def nbody(mass_, pos_, vel_, N, Nt, dt, G, softening):
-    mass = torch.from_numpy(mass_)
-    pos = torch.from_numpy(pos_)
-    vel = torch.from_numpy(vel_)
+def nbody(mass, pos, vel, N, Nt, dt, G, softening):
+    # mass = torch.from_numpy(mass_)
+    # pos = torch.from_numpy(pos_)
+    # vel = torch.from_numpy(vel_)
     # print("NT is ", Nt)
     # print("mass is ", mass)
     # print("pos is ", pos)
