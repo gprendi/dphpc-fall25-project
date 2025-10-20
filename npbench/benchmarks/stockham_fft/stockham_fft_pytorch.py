@@ -1,8 +1,8 @@
 import torch
 
-def stockham_fft(N, R, K, x, y):
-    X_torch = torch.tensor(torch.from_numpy(x), dtype=torch.complex128)
-    Y_torch = torch.tensor(torch.from_numpy(y), dtype=torch.complex128)
+def stockham_fft(N, R, K, X_torch, Y_torch):
+    # X_torch = torch.tensor(torch.from_numpy(x), dtype=torch.complex128)
+    # Y_torch = torch.tensor(torch.from_numpy(y), dtype=torch.complex128)
     t_r = torch.arange(R)
 
     i_coord, j_coord = torch.meshgrid(torch.arange(R), torch.arange(R), indexing='ij')
@@ -42,4 +42,7 @@ def stockham_fft(N, R, K, x, y):
         tmp_twid_reshaped = torch.reshape(tmp_twid, (R, R ** (K - 1)))
 
         Y_torch[:] = torch.reshape(torch.matmul(dft_mat, tmp_twid_reshaped), (N,))
-        y[:] = Y_torch[:]
+        # y[:] = Y_torch[:]
+
+    # y[:] = Y_torch[:].detach().cpu().numpy()
+    # x[:] = X_torch[:].detach().cpu().numpy()
