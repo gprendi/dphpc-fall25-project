@@ -1,6 +1,6 @@
 import torch
 
-def stockham_fft_pytorch(N, R, K, x, y):
+def stockham_fft(N, R, K, x, y):
     X_torch = torch.tensor(torch.from_numpy(x), dtype=torch.complex128)
     Y_torch = torch.tensor(torch.from_numpy(y), dtype=torch.complex128)
     t_r = torch.arange(R)
