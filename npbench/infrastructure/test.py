@@ -1,17 +1,18 @@
 # Copyright 2021 ETH Zurich and the NPBench authors. All rights reserved.
 import time
 
-from npbench.infrastructure import (Benchmark, Framework, timeout_decorator as tout, utilities as util)
+from npbench.infrastructure import (Benchmark,generate_framework, Framework, timeout_decorator as tout, utilities as util)
 from typing import Any, Callable, Dict, Sequence, Tuple
 
 
 class Test(object):
     """ A class for testing a framework on a benchmark. """
 
-    def __init__(self, bench: Benchmark, frmwrk: Framework, npfrmwrk: Framework = None):
+    def __init__(self, bench: Benchmark, frmwrk: Framework, npfrmwrk: Framework = None, jaxfrmwrk: Framework = None):
         self.bench = bench
         self.frmwrk = frmwrk
         self.numpy = npfrmwrk
+        self.jax = jaxfrmwrk
 
     def _execute(self, frmwrk: Framework, impl: Callable, impl_name: str, mode: str, bdata: Dict[str, Any], repeat: int,
                  ignore_errors: bool, exec_mode: str = "forward") -> Tuple[Any, Sequence[float]]:
@@ -50,7 +51,7 @@ class Test(object):
             assert len(out) == num_return_args + num_output_args, "Number of output arguments does not match."
         return out, timelist
 
-    def run(self, preset: str, validate: bool, repeat: int, timeout: float = 200.0, ignore_errors: bool = True,
+    def run(self, preset: str, validate: bool, repeat: int, timeout: float = 200.0, ignore_errors: bool = False,
             mode: str = "forward"):
         """ Tests the framework against the benchmark.
         :param preset: The preset to use for testing (S, M, L, paper).
@@ -60,22 +61,26 @@ class Test(object):
         print("***** Testing {f} with {b} on the {p} dataset *****".format(b=self.bench.bname,
                                                                            f=self.frmwrk.info["full_name"],
                                                                            p=preset))
-
         exec_mode = mode if mode in ("forward", "backward") else "forward"
-        if exec_mode != "forward" and validate:
-            print("Validation disabled for mode '{}'.".format(exec_mode))
-        do_validate = validate and exec_mode == "forward"
-
+        do_validate = validate
         bdata = self.bench.get_data(preset)
 
         # Run NumPy for validation
-        if do_validate and self.frmwrk.fname != "numpy" and self.numpy:
+        if do_validate and self.frmwrk.fname != "numpy" and self.numpy and mode == "forward":
             np_impl, np_impl_name = self.numpy.implementations(self.bench)[0]
             np_out, _ = self._execute(self.numpy, np_impl, np_impl_name, "validation", bdata, 1, ignore_errors,
                                       exec_mode="forward")
+            jax_out = None
+        elif do_validate and mode != "forward" and self.jax:
+            jax_context = {**bdata, **self.jax.imports()}
+            jax_impl, jax_impl_name = self.jax.implementations(self.bench)[0]
+            jax_out, _ = self._execute(self.jax, jax_impl, jax_impl_name, "validation", jax_context, 1, ignore_errors,
+                                      exec_mode="backward")
+            np_out = None
         else:
             do_validate = False
             np_out = None
+            jax_out = None
 
         # Extra information
         kind = ""
@@ -110,7 +115,7 @@ class Test(object):
 
             # Validation
             valid = True
-            if do_validate and np_out is not None:
+            if do_validate and np_out is not None and mode == 'forward':
                 try:
                     if isinstance(frmwrk_out, (tuple, list)):
                         frmwrk_out = [self.frmwrk.copy_back_func()(a) for a in frmwrk_out]
@@ -132,6 +137,29 @@ class Test(object):
                     print("Failed to run {} validation.".format(self.frmwrk.info["full_name"]))
                     if not ignore_errors:
                         raise
+            elif do_validate and jax_out is not None and mode != "forward":
+                try:
+                    if isinstance(frmwrk_out, (tuple, list)):
+                        frmwrk_out = [self.frmwrk.copy_back_func()(a) for a in frmwrk_out]
+                    else:
+                        frmwrk_out = self.frmwrk.copy_back_func()(frmwrk_out)
+
+                    frmwrk_name = self.frmwrk.info["full_name"] + " - " + impl_name
+
+
+                    rtol = 1e-5 if not 'rtol' in self.bench.info else self.bench.info['rtol']
+                    atol = 1e-8 if not 'atol' in self.bench.info else self.bench.info['atol']
+                    norm_error = 1e-5 if not 'norm_error' in self.bench.info else self.bench.info['norm_error']
+                    valid = util.validate(jax_out, frmwrk_out, frmwrk_name, rtol=rtol, atol=atol, norm_error=norm_error)
+                    if valid:
+                        print("{} - {} - validation: SUCCESS".format(frmwrk_name, impl_name))
+                    elif not ignore_errors:
+                        raise ValueError("{} did not validate!".format(frmwrk_name))
+                except Exception:
+                    print("Failed to run {} validation.".format(self.frmwrk.info["full_name"]))
+                    if not ignore_errors:
+                        raise
+
             # Main execution
             _, timelist = self._execute(self.frmwrk, impl, impl_name, f"median/{exec_mode}", context, repeat,
                                         ignore_errors, exec_mode=exec_mode)

@@ -56,7 +56,16 @@ if __name__ == "__main__":
                                 save_strict=args["save_strict_sdfg"],
                                 load_strict=args["load_strict_sdfg"])
     numpy = generate_framework("numpy")
+    jax = generate_framework("jax")
     lcount = LineCount(bench, frmwrk, numpy)
     lcount.count()
-    test = Test(bench, frmwrk, numpy)
+
+    # lcount_jax = LineCount(bench, frmwrk, jax)
+    # lcount_jax.count()
+
+    if (args["mode"] == "backward"):
+        test = Test(bench, frmwrk, numpy, jax)
+    else:
+        test = Test(bench, frmwrk, numpy)
+
     test.run(args["preset"], args["validate"], args["repeat"], args["timeout"], mode=args["mode"])

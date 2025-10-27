@@ -11,11 +11,22 @@ from npbench.infrastructure import (Benchmark, generate_framework, LineCount,
 def run_benchmark(benchname, fname, preset, validate, repeat, timeout,
                   ignore_errors, save_strict, load_strict, mode):
     frmwrk = generate_framework(fname, save_strict, load_strict)
+
     numpy = generate_framework("numpy")
+    jax = generate_framework("jax")
+
     bench = Benchmark(benchname)
     lcount = LineCount(bench, frmwrk, numpy)
     lcount.count()
-    test = Test(bench, frmwrk, numpy)
+
+    lcount_jax = LineCount(bench, frmwrk, jax)
+    lcount_jax.count()
+
+    if (mode == "backward"):
+        test = Test(bench, frmwrk, numpy, jax)
+    else:
+        test = Test(bench, frmwrk, numpy)
+
     test.run(preset, validate, repeat, timeout, ignore_errors, mode=mode)
 
 
