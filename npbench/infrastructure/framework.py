@@ -135,11 +135,12 @@ class Framework(object):
         output_args = self.mutable_args(bench, impl)
         return ", ".join(output_args)
 
-    def setup_str(self, bench: Benchmark, impl: Callable = None):
+    def setup_str(self, bench: Benchmark, impl: Callable = None, mode: str = "forward"):
         """ Generates the setup-string that should be used before calling
         the benchmark implementation.
         :param bench: A benchmark.
         :param impl: A benchmark implementation.
+        :param mode: Execution mode (forward/backward).
         """
 
         if len(bench.info["array_args"]):
@@ -148,11 +149,12 @@ class Framework(object):
             return arg_str + " = " + ", ".join(copy_args)
         return "pass"
 
-    def exec_str(self, bench: Benchmark, impl: Callable = None):
+    def exec_str(self, bench: Benchmark, impl: Callable = None, mode: str = "forward"):
         """ Generates the execution-string that should be used to call
         the benchmark implementation.
         :param bench: A benchmark.
         :param impl: A benchmark implementation.
+        :param mode: Execution mode (forward/backward).
         """
 
         arg_str = self.arg_str(bench, impl)

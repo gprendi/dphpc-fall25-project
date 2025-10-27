@@ -38,7 +38,7 @@ class APPyFramework(Framework):
         import appy
         return {'torch': torch}
 
-    def exec_str(self, bench: Benchmark, impl: Callable = None):
+    def exec_str(self, bench: Benchmark, impl: Callable = None, mode: str = "forward"):
         """ Generates the execution-string that should be used to call
         the benchmark implementation.
         :param bench: A benchmark.

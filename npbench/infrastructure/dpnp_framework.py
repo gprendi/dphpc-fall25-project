@@ -58,7 +58,7 @@ class DpnpFramework(Framework):
         dpnp = imports['dpnp']
         return lambda x: dpnp.asnumpy(x)
 
-    def setup_str(self, bench: Benchmark, impl: Callable = None) -> str:
+    def setup_str(self, bench: Benchmark, impl: Callable = None, mode: str = "forward") -> str:
         """ Generates the setup-string, typically for copying data to the selected device. """
         if len(bench.info["array_args"]):
             arg_str = self.out_arg_str(bench, impl)
@@ -66,7 +66,7 @@ class DpnpFramework(Framework):
             return arg_str + " = " + ", ".join(copy_args)
         return "pass"
 
-    def exec_str(self, bench: Benchmark, impl: Callable = None):
+    def exec_str(self, bench: Benchmark, impl: Callable = None, mode: str = "forward"):
         """ Generates the execution-string for Dpnp, ensuring it runs on the selected device. """
         arg_str = self.arg_str(bench, impl)
         main_exec_str = "__npb_result = __npb_impl({a})".format(a=arg_str)

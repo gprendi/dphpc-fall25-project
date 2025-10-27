@@ -1,10 +1,10 @@
 {
     "framework": {
-        "simple_name": "pytorch",
-        "full_name": "pytorch",
+        "simple_name": "pytorch_cpu",
+        "full_name": "PyTorch CPU",
         "prefix": "pyt",
         "postfix": "pytorch",
         "class": "PytorchFramework",
-        "arch": "gpu"
+        "arch": "cpu"
     }
 }

@@ -29,7 +29,7 @@ class CupyFramework(Framework):
         import cupy
         return cupy.asarray
 
-    def setup_str(self, bench: Benchmark, impl: Callable = None) -> str:
+    def setup_str(self, bench: Benchmark, impl: Callable = None, mode: str = "forward") -> str:
         """ Generates the setup-string that should be used before calling
         the benchmark implementation.
         :param bench: A benchmark.
@@ -44,7 +44,7 @@ class CupyFramework(Framework):
             return arg_str + " = " + ", ".join(copy_args) + "; " + sync_str
         return sync_str
 
-    def exec_str(self, bench: Benchmark, impl: Callable = None):
+    def exec_str(self, bench: Benchmark, impl: Callable = None, mode: str = "forward"):
         """ Generates the execution-string that should be used to call
         the benchmark implementation.
         :param bench: A benchmark.

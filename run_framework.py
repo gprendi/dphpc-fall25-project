@@ -9,14 +9,14 @@ from npbench.infrastructure import (Benchmark, generate_framework, LineCount,
 
 
 def run_benchmark(benchname, fname, preset, validate, repeat, timeout,
-                  ignore_errors, save_strict, load_strict):
+                  ignore_errors, save_strict, load_strict, mode):
     frmwrk = generate_framework(fname, save_strict, load_strict)
     numpy = generate_framework("numpy")
     bench = Benchmark(benchname)
     lcount = LineCount(bench, frmwrk, numpy)
     lcount.count()
     test = Test(bench, frmwrk, numpy)
-    test.run(preset, validate, repeat, timeout, ignore_errors)
+    test.run(preset, validate, repeat, timeout, ignore_errors, mode=mode)
 
 
 if __name__ == "__main__":
@@ -31,7 +31,12 @@ if __name__ == "__main__":
                         choices=['S', 'M', 'L', 'paper'],
                         nargs="?",
                         default='S')
-    parser.add_argument("-m", "--mode", type=str, nargs="?", default="main")
+    parser.add_argument("-m",
+                        "--mode",
+                        type=str,
+                        nargs="?",
+                        default="forward",
+                        choices=["forward", "backward"])
     parser.add_argument("-v",
                         "--validate",
                         type=util.str2bool,
@@ -70,7 +75,7 @@ if __name__ == "__main__":
                     args=(benchname, args["framework"], args["preset"],
                           args["validate"], args["repeat"], args["timeout"],
                           args["ignore_errors"], args["save_strict_sdfg"],
-                          args["load_strict_sdfg"]))
+                          args["load_strict_sdfg"], args["mode"]))
         p.start()
         p.join()
         exit_code = p.exitcode

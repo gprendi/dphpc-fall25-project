@@ -28,7 +28,7 @@ class JaxFramework(Framework):
         super().__init__(fname)
 
     def imports(self) -> Dict[str, Any]:
-        return {'jax': jax}
+        return {'jax': jax, 'jnp': jnp}
 
     def copy_func(self) -> Callable:
         """ Returns the copy-method that should be used 
@@ -98,12 +98,47 @@ class JaxFramework(Framework):
         
         return implementations
 
-    def exec_str(self, bench: Benchmark, impl: Callable = None):
+    def _autodiff(self, bench: Benchmark) -> Dict[str, Any]:
+        return bench.info.get("autodiff", {})
+
+    def exec_str(self, bench: Benchmark, impl: Callable = None, mode: str = "forward"):
         """ Generates the execution-string that should be used to call
         the benchmark implementation.
         :param bench: A benchmark.
         :param impl: A benchmark implementation.
         """
+
+        if mode == "backward":
+            ad = self._autodiff(bench)
+            input_args = bench.info.get("input_args", [])
+            grad_inputs = ad.get("grad_inputs", [])
+            grad_indices = [input_args.index(arg) for arg in grad_inputs if arg in input_args]
+            argnums_str = "(" + ", ".join(str(idx) for idx in grad_indices) + ("," if len(grad_indices) == 1 else "") + ")" if grad_indices else "()"
+
+            arg_names = self.args(bench, impl)
+            args_tuple = ", ".join(arg_names)
+            if len(arg_names) == 1:
+                args_tuple += ","
+
+            loss_target = ad.get("loss", {}).get("target", "result")
+            if loss_target == "result":
+                loss_expr = "jnp.sum(__npb_impl(*args))"
+            else:
+                target_index = input_args.index(loss_target)
+                loss_expr = f"jnp.sum(args[{target_index}])"
+
+            stmts = [
+                f"__npb_args = ({args_tuple})",
+                f"__npb_loss_fn = lambda *args: {loss_expr}",
+                f"__npb_loss, __npb_grads = jax.value_and_grad(__npb_loss_fn, argnums={argnums_str})(*__npb_args)",
+                "__npb_grads = (__npb_grads,) if not isinstance(__npb_grads, (tuple, list)) else tuple(__npb_grads)",
+                "__npb_loss = __npb_loss.block_until_ready()",
+                "__npb_grads = tuple(g.block_until_ready() for g in __npb_grads)",
+                # "__npb_loss = jax.device_get(__npb_loss)",
+                "__npb_result = tuple(jax.device_get(g) for g in __npb_grads)",
+                #"__npb_result = (__npb_loss,) + tuple(__npb_grads)"
+            ]
+            return "; ".join(stmts)
 
         arg_str = self.arg_str(bench, impl)
         main_exec_str = "__npb_result = jax.block_until_ready(__npb_impl({a}))".format(a=arg_str)

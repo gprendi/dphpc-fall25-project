@@ -23,7 +23,7 @@ class LegateFramework(Framework):
         from legate.timing import time
         return {'ltime': time}
 
-    def exec_str(self, bench: Benchmark, impl: Callable = None):
+    def exec_str(self, bench: Benchmark, impl: Callable = None, mode: str = "forward"):
         """ Generates the execution-string that should be used to call
         the benchmark implementation.
         :param bench: A benchmark.

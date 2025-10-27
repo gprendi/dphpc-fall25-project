@@ -20,7 +20,12 @@ if __name__ == "__main__":
                         choices=['S', 'M', 'L', 'paper'],
                         nargs="?",
                         default='S')
-    parser.add_argument("-m", "--mode", type=str, nargs="?", default="main")
+    parser.add_argument("-m",
+                        "--mode",
+                        type=str,
+                        nargs="?",
+                        default="forward",
+                        choices=["forward", "backward"])
     parser.add_argument("-v",
                         "--validate",
                         type=util.str2bool,
@@ -54,4 +59,4 @@ if __name__ == "__main__":
     lcount = LineCount(bench, frmwrk, numpy)
     lcount.count()
     test = Test(bench, frmwrk, numpy)
-    test.run(args["preset"], args["validate"], args["repeat"], args["timeout"])
+    test.run(args["preset"], args["validate"], args["repeat"], args["timeout"], mode=args["mode"])

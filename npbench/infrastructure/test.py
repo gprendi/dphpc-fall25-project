@@ -14,12 +14,12 @@ class Test(object):
         self.numpy = npfrmwrk
 
     def _execute(self, frmwrk: Framework, impl: Callable, impl_name: str, mode: str, bdata: Dict[str, Any], repeat: int,
-                 ignore_errors: bool) -> Tuple[Any, Sequence[float]]:
+                 ignore_errors: bool, exec_mode: str = "forward") -> Tuple[Any, Sequence[float]]:
         report_str = frmwrk.info["full_name"] + " - " + impl_name
         try:
             copy = frmwrk.copy_func()
-            setup_str = frmwrk.setup_str(self.bench, impl)
-            exec_str = frmwrk.exec_str(self.bench, impl)
+            setup_str = frmwrk.setup_str(self.bench, impl, mode=exec_mode)
+            exec_str = frmwrk.exec_str(self.bench, impl, mode=exec_mode)
         except Exception as e:
             print("Failed to load the {} implementation.".format(report_str))
             print(e)
@@ -50,7 +50,8 @@ class Test(object):
             assert len(out) == num_return_args + num_output_args, "Number of output arguments does not match."
         return out, timelist
 
-    def run(self, preset: str, validate: bool, repeat: int, timeout: float = 200.0, ignore_errors: bool = True):
+    def run(self, preset: str, validate: bool, repeat: int, timeout: float = 200.0, ignore_errors: bool = True,
+            mode: str = "forward"):
         """ Tests the framework against the benchmark.
         :param preset: The preset to use for testing (S, M, L, paper).
         :param validate: If true, it validates the output against NumPy.
@@ -60,14 +61,20 @@ class Test(object):
                                                                            f=self.frmwrk.info["full_name"],
                                                                            p=preset))
 
+        exec_mode = mode if mode in ("forward", "backward") else "forward"
+        if exec_mode != "forward" and validate:
+            print("Validation disabled for mode '{}'.".format(exec_mode))
+        do_validate = validate and exec_mode == "forward"
+
         bdata = self.bench.get_data(preset)
 
         # Run NumPy for validation
-        if validate and self.frmwrk.fname != "numpy" and self.numpy:
+        if do_validate and self.frmwrk.fname != "numpy" and self.numpy:
             np_impl, np_impl_name = self.numpy.implementations(self.bench)[0]
-            np_out, _ = self._execute(self.numpy, np_impl, np_impl_name, "validation", bdata, 1, ignore_errors)
+            np_out, _ = self._execute(self.numpy, np_impl, np_impl_name, "validation", bdata, 1, ignore_errors,
+                                      exec_mode="forward")
         else:
-            validate = False
+            do_validate = False
             np_out = None
 
         # Extra information
@@ -84,7 +91,8 @@ class Test(object):
 
         @tout.exit_after(timeout)
         def first_execution(impl, impl_name):
-            return self._execute(self.frmwrk, impl, impl_name, "first/validation", context, 1, ignore_errors)
+            return self._execute(self.frmwrk, impl, impl_name, f"first/{exec_mode}", context, 1, ignore_errors,
+                                 exec_mode=exec_mode)
 
         bvalues = []
         context = {**bdata, **self.frmwrk.imports()}
@@ -102,7 +110,7 @@ class Test(object):
 
             # Validation
             valid = True
-            if validate and np_out is not None:
+            if do_validate and np_out is not None:
                 try:
                     if isinstance(frmwrk_out, (tuple, list)):
                         frmwrk_out = [self.frmwrk.copy_back_func()(a) for a in frmwrk_out]
@@ -125,10 +133,12 @@ class Test(object):
                     if not ignore_errors:
                         raise
             # Main execution
-            _, timelist = self._execute(self.frmwrk, impl, impl_name, "median", context, repeat, ignore_errors)
+            _, timelist = self._execute(self.frmwrk, impl, impl_name, f"median/{exec_mode}", context, repeat,
+                                        ignore_errors, exec_mode=exec_mode)
             if timelist:
                 for t in timelist:
-                    bvalues.append(dict(details=impl_name, validated=valid, time=t))
+                    name = impl_name if exec_mode == "forward" else f"{impl_name}:{exec_mode}"
+                    bvalues.append(dict(details=name, validated=valid, time=t, mode=exec_mode))
 
         # create a database connection
         database = r"npbench.db"
@@ -151,7 +161,7 @@ class Test(object):
                 'domain': domain,
                 'dwarf': dwarf,
                 'preset': preset,
-                'mode': "main",
+                'mode': d.get("mode", exec_mode),
                 'framework': self.frmwrk.info["simple_name"],
                 'version': version,
                 'details': d["details"],
@@ -161,4 +171,3 @@ class Test(object):
             result = tuple(new_d.values())
             # print(result)
             util.create_result(conn, util.sql_insert_into_results_table, result)
-
