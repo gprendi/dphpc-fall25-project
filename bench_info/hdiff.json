@@ -21,6 +21,13 @@
         },
         "input_args": ["in_field", "out_field", "coeff"],
         "array_args": ["in_field", "out_field", "coeff"],
-        "output_args": ["out_field"]
+        "output_args": ["out_field"],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["in_field", "coeff"]
+        }
     }
 }
