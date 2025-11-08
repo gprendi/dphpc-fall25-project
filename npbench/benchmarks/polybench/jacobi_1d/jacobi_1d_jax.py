@@ -10,4 +10,4 @@ def kernel(TSTEPS: int, A: jax.Array, B: jax.Array):
         A = A.at[1:-1].set(0.33333 * (B[:-2] + B[1:-1] + B[2:]))
         return A, B
     A, B = lax.fori_loop(1, TSTEPS, body_fn, (A, B))
-    return jax.numpy.stack((A, B))
+    return A, B

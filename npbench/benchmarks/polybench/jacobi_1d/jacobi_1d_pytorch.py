@@ -9,4 +9,4 @@ def kernel(
     for t in range(1, TSTEPS):
         B_res[1:-1] = 0.33333 * (A_res[:-2] + A_res[1:-1] + A_res[2:])
         A_res[1:-1] = 0.33333 * (B_res[:-2] + B_res[1:-1] + B_res[2:])
-    return torch.stack((A_res , B_res))
+    return A_res , B_res
