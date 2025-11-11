@@ -21,6 +21,13 @@
         },
         "input_args": ["TSTEPS", "N", "A"],
         "array_args": ["A"],
-        "output_args": ["A"]
+        "output_args": ["A"],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["A"]
+        }
     }
 }

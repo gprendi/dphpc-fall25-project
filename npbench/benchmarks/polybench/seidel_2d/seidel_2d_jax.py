@@ -1,9 +1,9 @@
 import jax
 import jax.numpy as jnp
 from jax import lax
+from functools import partial
 
-
-@jax.jit
+@partial(jax.jit, static_argnums=(0, 1))
 def kernel(TSTEPS, N, A):
 
     def loop1(t, A):
