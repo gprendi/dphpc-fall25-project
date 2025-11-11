@@ -21,6 +21,13 @@
         },
         "input_args": ["neigh_idx", "dH", "G", "D", "Sigma"],
         "array_args": ["neigh_idx", "dH", "G", "D", "Sigma"],
-        "output_args": []
+        "output_args": [],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["neigh_idx", "dH", "G", "D", "Sigma"]
+        }
     }
 }

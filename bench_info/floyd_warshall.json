@@ -21,6 +21,13 @@
         },
         "input_args": ["path"],
         "array_args": ["path"],
-        "output_args": ["path"]
+        "output_args": ["path"],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["path"]
+        }
     }
 }

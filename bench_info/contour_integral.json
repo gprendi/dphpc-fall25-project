@@ -21,6 +21,13 @@
         },
         "input_args": ["NR", "NM", "slab_per_bc", "Ham", "int_pts", "Y"],
         "array_args": ["Ham", "int_pts", "Y"],
-        "output_args": []
+        "output_args": [],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["Ham", "int_pts", "Y"]
+        }
     }
 }

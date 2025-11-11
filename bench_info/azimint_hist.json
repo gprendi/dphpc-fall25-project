@@ -21,6 +21,13 @@
         },
         "input_args": ["data", "radius", "npt"],
         "array_args": ["data", "radius"],
-        "output_args": []
+        "output_args": [],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["data", "radius"]
+        }
     }
 }

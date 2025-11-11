@@ -21,6 +21,13 @@
         },
         "input_args": ["theta_1", "phi_1", "theta_2", "phi_2"],
         "array_args": ["theta_1", "phi_1", "theta_2", "phi_2"],
-        "output_args": []
+        "output_args": [],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["theta_1", "phi_1", "theta_2", "phi_2"]
+        }
     }
 }

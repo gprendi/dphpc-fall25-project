@@ -21,6 +21,13 @@
         },
         "input_args": ["input", "conv1", "conv2", "conv3"],
         "array_args": ["input", "conv1", "conv2", "conv3"],
-        "output_args": []
+        "output_args": [],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["input", "conv1", "conv2", "conv3"]
+        }
     }
 }

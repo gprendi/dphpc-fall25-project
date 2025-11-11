@@ -21,6 +21,13 @@
         },
         "input_args": ["alpha", "beta", "A", "u1", "v1", "u2", "v2", "w", "x", "y", "z"],
         "array_args": ["A", "u1", "v1", "u2", "v2", "w", "x", "y", "z"],
-        "output_args": ["A", "w", "x"]
+        "output_args": ["A", "w", "x"],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["A", "u1", "v1", "u2", "v2", "w", "x", "y", "z"]
+        }
     }
 }
