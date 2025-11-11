@@ -1,3 +1,21 @@
+# Virtual environment
+.venv/
+
+# uv cache and build artifacts
+.uv/
+__pycache__/
+*.pyc
+
+# Build outputs
+build/
+dist/
+*.egg-info/
+
+# IDE/project files
+.vscode/
+.idea/
+.DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
