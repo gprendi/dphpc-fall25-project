@@ -35,6 +35,7 @@ while [[ $# -gt 0 ]]; do
         -r|--repeat) REPEAT="$2"; shift 2 ;;
         -t|--timeout) TIMEOUT="$2"; shift 2 ;;
         -v|--validate) VALIDATE="$2"; shift 2 ;;
+        -m|--mode) MODE="$2"; shift 2 ;;
         --) shift; EXTRA_ARGS+=("$@"); break ;;
         *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
@@ -96,6 +97,6 @@ for bench in "${BENCHES[@]}"; do
     if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
         CMD+=("${EXTRA_ARGS[@]}")
     fi
-    "${CMD[@]}"
+    "${CMD[@]}" || true
     echo
 done
