@@ -127,8 +127,8 @@ data = data.drop(['mode', 'details'], axis=1).reset_index(drop=True)
 frmwrks = list(data['framework'].unique())
 print(frmwrks)
 # assert ('numpy' in frmwrks)
-frmwrks.remove('numpy')
-frmwrks.append('numpy')
+frmwrks.remove('jax')
+frmwrks.append('jax')
 lfilter = ['benchmark', 'domain'] + frmwrks
 
 # get improvement over numpy (keep times in best_wide_time for numpy column), reorder columns
@@ -138,7 +138,7 @@ best_wide = best.pivot_table(index=["benchmark", "domain"],
 best_wide = best_wide[lfilter].reset_index(drop=True)
 best_wide_time = best_wide.copy(deep=True)
 for f in frmwrks:
-    best_wide[f] = best_wide[f] / best_wide_time['numpy']
+    best_wide[f] = best_wide[f] / best_wide_time['jax']
 
 # compute ci-size for each
 cidata = data.groupby(["benchmark", "domain", "framework"], dropna=False).agg({
@@ -207,7 +207,7 @@ for j in range(len(overall_wide.columns)):
                             color="white",
                             fontsize=8)
     else:
-        label = overall_time_wide['numpy'].to_numpy()[0]
+        label = overall_time_wide['jax'].to_numpy()[0]
 
 # plot benchmark heatmap
 hm_data = best_wide.drop(['benchmark', 'domain'], axis=1)
@@ -276,7 +276,7 @@ for i in range(len(best_wide['benchmark'])):
                                     color="white",
                                     fontsize=8)
         else:
-            label = best_wide_time['numpy'].to_numpy()[i]
+            label = best_wide_time['jax'].to_numpy()[i]
             p = cidata[(cidata['framework_'] == f)
                        & (cidata['benchmark_'] == b)]['perc']
             try:
