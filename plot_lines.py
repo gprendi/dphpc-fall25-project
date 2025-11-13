@@ -30,9 +30,9 @@ best = best.drop(['domain', 'mode', 'details'], axis=1).reset_index(drop=True)
 
 frmwrks = list(best['framework'].unique())
 print(frmwrks)
-assert ('numpy' in frmwrks)
-frmwrks.remove('numpy')
-frmwrks.append('numpy')
+assert ('jax' in frmwrks)
+frmwrks.remove('jax')
+frmwrks.append('jax')
 percs = ["{}_perc".format(f) for f in frmwrks]
 
 # get improvement over numpy (keep times in best_wide_time for numpy column), reorder columns
@@ -47,7 +47,7 @@ diffs = best.pivot_table(index=["benchmark"],
 diffs = diffs[frmwrks].reset_index(drop=True)
 
 for f in frmwrks:
-    data["{}_perc".format(f)] = (diffs[f] / data['numpy']) * 100
+    data["{}_perc".format(f)] = (diffs[f] / data['jax']) * 100
 
 # color of the heatmap is percentage changed
 colors = data[percs]
@@ -57,9 +57,9 @@ colors = colors.rename(columns={a: b for a, b in zip(percs, frmwrks)})
 # number in the heatmap is change to NumPy (except for NumPy, where it is the total)
 numbers = data[frmwrks]
 for f in frmwrks:
-    if f == 'numpy':
+    if f == 'jax':
         continue
-    numbers[f] = numbers[f] - numbers['numpy']
+    numbers[f] = numbers[f] - numbers['jax']
 
 plt.style.use('classic')
 figsz = (len(frmwrks) + 1, 12)
