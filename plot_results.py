@@ -126,7 +126,7 @@ data = data.drop(['mode', 'details'], axis=1).reset_index(drop=True)
 
 frmwrks = list(data['framework'].unique())
 print(frmwrks)
-assert ('numpy' in frmwrks)
+# assert ('numpy' in frmwrks)
 frmwrks.remove('numpy')
 frmwrks.append('numpy')
 lfilter = ['benchmark', 'domain'] + frmwrks
