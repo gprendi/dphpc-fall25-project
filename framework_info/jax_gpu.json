@@ -1,10 +1,10 @@
 {
     "framework": {
-        "simple_name": "jax",
-        "full_name": "Jax",
+        "simple_name": "jax_gpu",
+        "full_name": "Jax (GPU)",
         "prefix": "jax",
         "postfix": "jax",
         "class": "JaxFramework",
-        "arch": "cpu"
+        "arch": "gpu"
     }
 }

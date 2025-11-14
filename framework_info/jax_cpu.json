@@ -1,0 +1,10 @@
+{
+    "framework": {
+        "simple_name": "jax_cpu",
+        "full_name": "Jax (CPU)",
+        "prefix": "jax",
+        "postfix": "jax",
+        "class": "JaxFramework",
+        "arch": "cpu"
+    }
+}
