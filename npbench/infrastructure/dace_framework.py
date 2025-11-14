@@ -277,6 +277,12 @@ class DaceFramework(Framework):
                                                        context=locals(),
                                                        output='__npb_result',
                                                        verbose=False)
+                # Attach a placeholder autodiff attribute to the compiled exec
+                # If real DaCe autodiff is available we may populate this later
+                try:
+                    setattr(dc_exec, "_autodiff", None)
+                except Exception:
+                    pass
                 implementations.append((dc_exec, sdfg._name))
             except Exception as e:
                 print("Failed to compile DaCe {a} {s} implementation.".format(a=self.info["arch"], s=sdfg._name))
@@ -314,3 +320,66 @@ class DaceFramework(Framework):
 
         input_params = self.params(bench, impl)
         return ", ".join(["{p}={p}".format(p=p) for p in input_params])
+
+    def _autodiff(self, bench: Benchmark):
+        """Return autodiff metadata from the benchmark if present."""
+        return bench.info.get("autodiff", {})
+
+    def setup_str(self, bench: Benchmark, impl: Callable = None, mode: str = "forward") -> str:
+        """Generates the setup-string that should be used before calling
+        the benchmark implementation. Adds any backward-specific setup if
+        required by the framework.
+        """
+        base = super().setup_str(bench, impl)
+        # DaCe doesn't have a tensor.requires_grad concept; no extra setup
+        # is necessary here. Keep parity with other frameworks for API.
+        stmt = base if base and base != "pass" else "pass"
+        # If GPU, ensure device synchronization after setup so timing is fair
+        if self.info.get("arch", "cpu") == "gpu":
+            sync = "import cupy; cupy.cuda.stream.get_current_stream().synchronize()"
+            return sync if stmt == "pass" else f"{stmt}; {sync}"
+        return stmt
+
+    def exec_str(self, bench: Benchmark, impl: Callable = None, mode: str = "forward") -> str:
+        """Generates the execution-string that should be used to call
+        the benchmark implementation. Supports backward mode by calling a
+        DaCe-provided autodiff callable attached to the compiled implementation
+        (impl._autodiff). If that callable is not present the call will fail
+        at runtime with a clear message.
+        """
+        arg_str = self.arg_str(bench, impl)
+        if mode == "backward":
+            ad = self._autodiff(bench)
+            grad_inputs = ad.get("grad_inputs", [])
+            target = ad.get("loss", {}).get("target", "result")
+
+            call_stmt = "__npb_forward = __npb_impl({a})".format(a=arg_str)
+            tuple_check = "__npb_forward = sum(__npb_forward) if isinstance(__npb_forward, tuple) else __npb_forward"
+            if target == "result":
+                loss_expr = "__npb_forward.sum()"
+            else:
+                # target is one of the input argument names; use the prefixed name
+                pref = "__npb_{pr}_{a}".format(pr=self.info["prefix"], a=target)
+                loss_expr = f"{pref}.sum()"
+            loss_stmt = "__npb_loss = {expr}".format(expr=loss_expr)
+
+            # Attempt to call an autodiff callable attached to the implementation
+            # The callable is expected to return a tuple of gradients corresponding
+            # to the requested grad_inputs (order: as in autodiff metadata)
+            autodiff_call = "__npb_grads = __npb_impl._autodiff({a}, loss_target=\"{t}\")".format(a=arg_str, t=target)
+            normalize = "__npb_grads = (__npb_grads,) if not isinstance(__npb_grads, (tuple, list)) else tuple(__npb_grads)"
+            result_stmt = "__npb_result = __npb_grads"
+
+            stmts = [call_stmt, tuple_check, loss_stmt, autodiff_call, normalize, result_stmt]
+            # GPU sync for fairness
+            if self.info.get("arch", "cpu") == "gpu":
+                stmts.append("import cupy; cupy.cuda.stream.get_current_stream().synchronize()")
+            return "; ".join(stmts)
+
+        # Forward mode uses the compiled SDFG directly
+        main_exec_str = "__npb_result = __npb_impl({a})".format(a=arg_str)
+        tuple_check = "__npb_result = sum(__npb_result) if isinstance(__npb_result, tuple) else __npb_result"
+        stmts = [main_exec_str, tuple_check]
+        if self.info.get("arch", "cpu") == "gpu":
+            stmts.append("import cupy; cupy.cuda.stream.get_current_stream().synchronize()")
+        return "; ".join(stmts)
