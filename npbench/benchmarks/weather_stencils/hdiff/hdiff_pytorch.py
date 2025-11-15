@@ -1,5 +1,6 @@
 import torch
 
+@torch.compile
 def hdiff(in_field: torch.Tensor, out_field: torch.Tensor, coeff: torch.Tensor) -> torch.Tensor:
     I, J, K = out_field.shape[0], out_field.shape[1], out_field.shape[2]
     lap_field = 4.0 * in_field[1:I + 3, 1:J + 3, :] - (

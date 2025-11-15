@@ -1,6 +1,5 @@
 import torch
 
-
 def kernel(TSTEPS, N, A: torch.Tensor) -> torch.Tensor:
 
     A_res = A.clone() if A.requires_grad else A

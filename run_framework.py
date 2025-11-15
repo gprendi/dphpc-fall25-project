@@ -13,7 +13,7 @@ def run_benchmark(benchname, fname, preset, validate, repeat, timeout,
     frmwrk = generate_framework(fname, save_strict, load_strict)
 
     numpy = generate_framework("numpy")
-    jax = generate_framework("jax")
+    jax = generate_framework("jax_cpu")
 
     bench = Benchmark(benchname)
     lcount = LineCount(bench, frmwrk, numpy)

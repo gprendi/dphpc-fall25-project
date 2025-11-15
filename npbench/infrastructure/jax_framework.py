@@ -29,13 +29,66 @@ class JaxFramework(Framework):
 
         super().__init__(fname)
 
+        # Determine desired architecture from framework info and select device
+        arch = self.info.get("arch", "cpu").lower()
+        self._arch = arch
+        # jax and jnp are imported at module level; ensure they exist
+        try:
+            self._jax = jax
+            self._jnp = jnp
+        except NameError:
+            raise RuntimeError("JAX is not available in the current environment")
+
+        # Choose device according to requested arch
+        if arch == "gpu":
+            gpu_devices = jax.devices("gpu")
+            print("jax gpu devices:", gpu_devices, gpu_devices[0].device_kind)
+            if not gpu_devices:
+                raise RuntimeError("JAX GPU framework requested but no GPU device is available")
+            self._device = gpu_devices[0]
+        else:
+            # default to CPU device
+            cpu_devices = jax.devices("cpu")
+            print("jax cpu devices:", cpu_devices)
+            if not cpu_devices:
+                raise RuntimeError("JAX CPU framework requested but no CPU device is available")
+            self._device = cpu_devices[0]
+
     def imports(self) -> Dict[str, Any]:
-        return {"jax": jax, "jnp": jnp}
+        # expose jax, jnp and the selected device
+        return {"jax": self._jax, "jnp": self._jnp, "device": self._device}
+
+    def version(self):
+        return self._jax.__version__
 
     def copy_func(self) -> Callable:
         """Returns the copy-method that should be used
         for copying the benchmark arguments."""
-        return jnp.array
+        jax = self._jax
+        device = self._device
+
+        def inner(arr):
+            # Use device_put to place arrays on the chosen device
+            try:
+                return jax.device_put(arr, device)
+            except Exception:
+                # fallback to array conversion
+                return self._jnp.array(arr)
+
+        return inner
+
+    def copy_back_func(self) -> Callable:
+        """Transform device values back to host numpy arrays for validation."""
+        jax = self._jax
+
+        def inner(value):
+            try:
+                return jax.device_get(value)
+            except Exception:
+                # if it's already a numpy array or python scalar, return as-is
+                return value
+
+        return inner
 
     def impl_files(self, bench: Benchmark):
         """Returns the framework's implementation files for a particular
