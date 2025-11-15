@@ -21,6 +21,13 @@
         },
         "input_args": ["N", "seq"],
         "array_args": ["seq"],
-        "output_args": []
+        "output_args": [],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["seq"]
+        }
     }
 }

@@ -21,6 +21,13 @@
         },
         "input_args": ["input", "w1", "b1", "w2", "b2", "w3", "b3"],
         "array_args": ["input", "w1", "b1", "w2", "b2", "w3", "b3"],
-        "output_args": []
+        "output_args": [],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["input", "w1", "b1", "w2", "b2", "w3", "b3"]
+        }
     }
 }

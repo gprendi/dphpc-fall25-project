@@ -22,6 +22,13 @@
         },
         "input_args": ["utens_stage", "u_stage", "wcon", "u_pos", "utens", "dtr_stage"],
         "array_args": ["utens_stage", "u_stage", "wcon", "u_pos", "utens"],
-        "output_args": ["utens_stage"]
+        "output_args": ["utens_stage"],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["utens_stage", "u_stage", "wcon", "u_pos", "utens"]
+        }
     }
 }

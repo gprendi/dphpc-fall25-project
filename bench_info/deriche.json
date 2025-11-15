@@ -21,6 +21,13 @@
         },
         "input_args": ["alpha", "imgIn"],
         "array_args": ["imgIn"],
-        "output_args": []
+        "output_args": [],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["imgIn"]
+        }
     }
 }

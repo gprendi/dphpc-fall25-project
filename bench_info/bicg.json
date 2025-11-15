@@ -21,6 +21,13 @@
         },
         "input_args": ["A", "p", "r"],
         "array_args": ["A", "p", "r"],
-        "output_args": []
+        "output_args": [],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["A", "p", "r"]
+        }
     }
 }

@@ -24,6 +24,14 @@
                        "fc1w", "fc1b", "fc2w", "fc2b", "fc3w", "fc3b", "N", "C_before_fc1"],
         "array_args": ["input", "conv1", "conv1bias", "conv2", "conv2bias",
                        "fc1w", "fc1b", "fc2w", "fc2b", "fc3w", "fc3b"],
-        "output_args": []
+        "output_args": [],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["input", "conv1", "conv1bias", "conv2", "conv2bias",
+                            "fc1w", "fc1b", "fc2w", "fc2b", "fc3w", "fc3b"]
+        }
     }
 }

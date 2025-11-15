@@ -21,6 +21,13 @@
         },
         "input_args": ["input", "weights", "bias"],
         "array_args": ["input", "weights", "bias"],
-        "output_args": []
+        "output_args": [],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["input", "weights", "bias"]
+        }
     }
 }

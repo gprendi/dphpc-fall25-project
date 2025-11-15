@@ -22,6 +22,13 @@
         "input_args": ["mass", "pos", "vel", "N", "Nt", "dt", "G", "softening"],
         "array_args": ["mass", "pos", "vel"],
         "output_args": [],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["mass", "pos", "vel"]
+        },
         "norm_error": 1e-1
     }
 }

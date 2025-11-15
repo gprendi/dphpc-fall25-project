@@ -21,6 +21,13 @@
         },
         "input_args": ["alpha", "beta", "C", "A", "B"],
         "array_args": ["C", "A", "B"],
-        "output_args": ["C"]
+        "output_args": ["C"],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["C", "A", "B"]
+        }
     }
 }
