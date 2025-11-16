@@ -1,6 +1,7 @@
 import torch
 
 
+@torch.compile
 def kernel(alpha, beta, C, A, B):
     C_res = C * beta
     m, n = C_res.shape

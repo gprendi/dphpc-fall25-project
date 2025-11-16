@@ -1,6 +1,7 @@
 import torch
 
 
+@torch.compile
 def kernel(alpha, beta, C, A):
     alpha_t = torch.as_tensor(alpha, dtype=C.dtype, device=C.device)
     beta_t = torch.as_tensor(beta, dtype=C.dtype, device=C.device)
