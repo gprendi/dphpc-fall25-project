@@ -132,10 +132,15 @@ def inner(_it, _timer{init}):
 """
 
 
-def benchmark(stmt, setup="pass", out_text="", repeat=1, context={}, output=None, verbose=True):
+def benchmark(stmt, setup="pass", out_text="", repeat=1, context={}, output=None, verbose=True, warmup: int = 0):
 
     ldict = {**context}
-    raw_time_list = timeit.repeat(stmt, setup=setup, repeat=repeat, number=1, globals=ldict)
+    timer = timeit.Timer(stmt, setup=setup, globals=ldict)
+    warmup_count = max(0, warmup)
+    for _ in range(warmup_count):
+        timer.timeit(number=1)
+
+    raw_time_list = timer.repeat(repeat, number=1)
     raw_time = np.median(raw_time_list)
     ms_time = time_to_ms(raw_time)
     if verbose:

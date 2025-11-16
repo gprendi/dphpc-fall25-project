@@ -105,7 +105,8 @@ def _run_combo(benchname: str, framework_name: str, preset: str, validate: bool,
                  repeat,
                  timeout,
                  ignore_errors,
-                 mode=mode)
+                 mode=mode,
+                 warmup=warmup)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -129,6 +130,11 @@ def _parse_args() -> argparse.Namespace:
                         type=int,
                         default=5,
                         help="Number of repetitions per benchmark run.")
+    parser.add_argument("-w",
+                        "--warmup",
+                        type=int,
+                        default=2,
+                        help="Number of warm-up executions before timing.")
     parser.add_argument("-t",
                         "--timeout",
                         type=float,
@@ -239,7 +245,8 @@ def main() -> int:
                                   args=(benchname, framework, args.preset,
                                         args.validate, args.repeat,
                                         args.timeout, args.ignore_errors,
-                                        modes, baseline_framework))
+                                        modes, baseline_framework,
+                                        args.warmup))
                 process.start()
                 process.join()
                 if process.exitcode != 0:
