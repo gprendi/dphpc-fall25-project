@@ -47,6 +47,11 @@ if __name__ == "__main__":
                         type=util.str2bool,
                         nargs="?",
                         default=False)
+    parser.add_argument("-v",
+                        "--visualize",
+                        type=util.str2bool,
+                        nargs="?",
+                        default=False)
     args = vars(parser.parse_args())
 
     # print(args)
@@ -62,14 +67,15 @@ if __name__ == "__main__":
 
     # lcount_jax = LineCount(bench, frmwrk, jax)
     # lcount_jax.count()
+    visualize = args["visualize"]
 
     if (args["mode"] == "backward"):
         if args["validate"]:
             jax = generate_framework("jax_cpu")
-            test = Test(bench, frmwrk, numpy, jax)
+            test = Test(bench, frmwrk, numpy, jax, visualize=visualize)
         else:
-            test = Test(bench, frmwrk, numpy, None)
+            test = Test(bench, frmwrk, numpy, None, visualize=visualize)
     else:
-        test = Test(bench, frmwrk, numpy)
+        test = Test(bench, frmwrk, numpy, visualize=visualize)
 
     test.run(args["preset"], args["validate"], args["repeat"], args["timeout"], mode=args["mode"])

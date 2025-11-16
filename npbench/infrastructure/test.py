@@ -8,11 +8,12 @@ from typing import Any, Callable, Dict, Sequence, Tuple
 class Test(object):
     """ A class for testing a framework on a benchmark. """
 
-    def __init__(self, bench: Benchmark, frmwrk: Framework, npfrmwrk: Framework = None, jaxfrmwrk: Framework = None):
+    def __init__(self, bench: Benchmark, frmwrk: Framework, npfrmwrk: Framework = None, jaxfrmwrk: Framework = None, visualize = False):
         self.bench = bench
         self.frmwrk = frmwrk
         self.numpy = npfrmwrk
         self.jax = jaxfrmwrk
+        self.visualize = visualize
 
     def _execute(self, frmwrk: Framework, impl: Callable, impl_name: str, mode: str, bdata: Dict[str, Any], repeat: int,
                  ignore_errors: bool, exec_mode: str = "forward") -> Tuple[Any, Sequence[float]]:
@@ -159,6 +160,8 @@ class Test(object):
                     print("Failed to run {} validation.".format(self.frmwrk.info["full_name"]))
                     if not ignore_errors:
                         raise
+            if self.visualize and impl_name == "pytorch":
+
 
             # Main execution
             _, timelist = self._execute(self.frmwrk, impl, impl_name, f"median/{exec_mode}", context, repeat,
