@@ -1,9 +1,10 @@
 import jax
 import jax.numpy as jnp
 from jax import lax
+from functools import partial
 
 
-@jax.jit
+@partial(jax.jit, static_argnums=(0,))
 def kernel(TMAX, ex, ey, hz, _fict_):
 
     def loop_body(t, loop_vars):
@@ -16,4 +17,4 @@ def kernel(TMAX, ex, ey, hz, _fict_):
         return ex, ey, hz
 
     ex, ey, hz = lax.fori_loop(0, TMAX, loop_body, (ex, ey, hz))
-    return ex, ey, hz, _fict_
+    return ex, ey, hz
