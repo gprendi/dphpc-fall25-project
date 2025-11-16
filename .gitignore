@@ -1,3 +1,6 @@
+visualizations
+npbench.db
+
 # Virtual environment
 .venv/
 
