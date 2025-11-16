@@ -1,8 +1,9 @@
 import jax
 import jax.numpy as jnp
 from jax import lax
+from functools import partial
 
-@jax.jit
+@partial(jax.jit, static_argnums=(0,))
 def kernel(TSTEPS: int, A: jnp.ndarray, B: jnp.ndarray):
     def time_step(t, arrays):
         A, B = arrays
