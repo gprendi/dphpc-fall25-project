@@ -47,7 +47,7 @@ if __name__ == "__main__":
                         type=util.str2bool,
                         nargs="?",
                         default=False)
-    parser.add_argument("-v",
+    parser.add_argument("-z",
                         "--visualize",
                         type=util.str2bool,
                         nargs="?",
