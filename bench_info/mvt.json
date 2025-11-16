@@ -21,6 +21,13 @@
         },
         "input_args": ["x1", "x2", "y_1", "y_2", "A"],
         "array_args": ["x1", "x2", "y_1", "y_2", "A"],
-        "output_args": ["x1", "x2"]
+        "output_args": ["x1", "x2"],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["x1", "x2", "y_1", "y_2", "A"]
+        }
     }
 }
