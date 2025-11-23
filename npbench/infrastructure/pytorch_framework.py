@@ -234,9 +234,9 @@ class PytorchFramework(Framework):
 
         # Forward mode with tuple check
         main_exec_str = "__npb_result = __npb_impl({a})".format(a=arg_str)
-        tuple_check = "__npb_result = sum(__npb_result) if isinstance(__npb_result, tuple) else __npb_result"
+        # tuple_check = "__npb_result = sum(__npb_result) if isinstance(__npb_result, tuple) else __npb_result"
 
-        stmts = [main_exec_str, tuple_check]
+        stmts = [main_exec_str]
         if self._needs_sync:
             stmts.append("torch.cuda.synchronize()")
 
