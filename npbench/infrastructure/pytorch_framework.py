@@ -230,7 +230,7 @@ class PytorchFramework(Framework):
             stmts = []
             if self._needs_sync:
                 stmts.append("torch.cuda.synchronize()")
-            stmts.append("__npb_loss.backward(retain_graph=True)")
+            stmts.append("__npb_loss.backward()")
             if self._needs_sync:
                 stmts.append("torch.cuda.synchronize()")
             stmts.append(grads_stmt)
