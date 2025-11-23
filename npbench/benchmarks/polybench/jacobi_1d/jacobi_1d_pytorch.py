@@ -1,8 +1,11 @@
 import torch
 from typing import Tuple
 
-# M dataset - without loop_body: 1988ms, clone in loop_body: 1014ms (JAX: 47ms)
-# paper dataset - without loop_body: 2672ms, clone in loop_body: 1350ms (JAX: 72ms)
+# GPU: M dataset - without loop_body: 1988ms, clone in loop_body: 1014ms (JAX: 47ms)
+# GPU: paper dataset - without loop_body: 2672ms, clone in loop_body: 1350ms (JAX: 72ms)
+
+# CPU: M dataset - without loop_body: 1511ms, clone in loop_body: 994ms (JAX: 494ms)
+# CPU: paper dataset - without loop_body: 3918ms, clone in loop_body: 1966ms (JAX: 1860ms)
 
 def kernel(
     TSTEPS: int, A: torch.Tensor, B: torch.Tensor
