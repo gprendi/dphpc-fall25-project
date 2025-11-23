@@ -8,3 +8,4 @@ def kernel(NR, NQ, NP, A, C4):
     #         sum[:] = A[r, q, :] @ C4
     #         A[r, q, :] = sum
     A[:] = np.reshape(np.reshape(A, (NR, NQ, 1, NP)) @ C4, (NR, NQ, NP))
+    return A
