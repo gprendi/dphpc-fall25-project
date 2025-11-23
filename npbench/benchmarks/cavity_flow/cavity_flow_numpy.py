@@ -80,3 +80,5 @@ def cavity_flow(nx, ny, nt, nit, u, v, dt, dx, dy, p, rho, nu):
         v[-1, :] = 0
         v[:, 0] = 0
         v[:, -1] = 0
+
+    return u, v, p
