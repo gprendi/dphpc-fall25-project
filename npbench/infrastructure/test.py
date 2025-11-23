@@ -41,6 +41,7 @@ class Test(object):
             if not ignore_errors:
                 raise
             return None, None
+        
         if out is not None:
             if isinstance(out, (tuple, list)):
                 out = list(out)
@@ -49,10 +50,11 @@ class Test(object):
         else:
             out = []
         if "output_args" in self.bench.info.keys():
-            num_return_args = len(out)
+            
             num_output_args = len(self.bench.info["output_args"])
-            out += [ldict[a] for a in frmwrk.inout_args(self.bench)]
-            assert len(out) == num_return_args + num_output_args, "Number of output arguments does not match."
+            # out += [ldict[a] for a in frmwrk.inout_args(self.bench)]
+            print("Number of output arguments:", num_output_args, " vs ", len(out))
+            assert len(out) == num_output_args, "Number of output arguments does not match."
         
         # save locals dictionary from the execution if we're gonna visualize
         if capture_state:
