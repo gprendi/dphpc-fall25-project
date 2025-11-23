@@ -1,21 +1,25 @@
 # Copyright 2021 ETH Zurich and the NPBench authors. All rights reserved.
 import time
+from pathlib import Path
 
 from npbench.infrastructure import (Benchmark,generate_framework, Framework, timeout_decorator as tout, utilities as util)
 from typing import Any, Callable, Dict, Sequence, Tuple
+from torchviz import make_dot
 
 
 class Test(object):
     """ A class for testing a framework on a benchmark. """
 
-    def __init__(self, bench: Benchmark, frmwrk: Framework, npfrmwrk: Framework = None, jaxfrmwrk: Framework = None):
+    def __init__(self, bench: Benchmark, frmwrk: Framework, npfrmwrk: Framework = None, jaxfrmwrk: Framework = None, visualize = False):
         self.bench = bench
         self.frmwrk = frmwrk
         self.numpy = npfrmwrk
         self.jax = jaxfrmwrk
+        self.visualize = visualize
+        self._captured_exec_state = None
 
     def _execute(self, frmwrk: Framework, impl: Callable, impl_name: str, mode: str, bdata: Dict[str, Any], repeat: int,
-                 ignore_errors: bool, exec_mode: str = "forward", warmup: int = 0) -> Tuple[Any, Sequence[float]]:
+                 ignore_errors: bool, exec_mode: str = "forward", capture_state: bool = False, warmup: int = 0) -> Tuple[Any, Sequence[float]]:
         report_str = frmwrk.info["full_name"] + " - " + impl_name
         try:
             copy = frmwrk.copy_func()
@@ -49,6 +53,13 @@ class Test(object):
             num_output_args = len(self.bench.info["output_args"])
             out += [ldict[a] for a in frmwrk.inout_args(self.bench)]
             assert len(out) == num_return_args + num_output_args, "Number of output arguments does not match."
+        
+        # save locals dictionary from the execution if we're gonna visualize
+        if capture_state:
+            self._captured_exec_state = dict(ldict)
+        else:
+            self._captured_exec_state = None
+
         return out, timelist
 
     def run(self, preset: str, validate: bool, repeat: int, timeout: float = 200.0, ignore_errors: bool = False,
@@ -65,6 +76,8 @@ class Test(object):
         exec_mode = mode if mode in ("forward", "backward") else "forward"
         do_validate = validate
         bdata = self.bench.get_data(preset)
+        params = self.bench.info.get("parameters", {})
+        viz_preset = "visualize" if "visualize" in params else None
 
         # Run NumPy for validation
         if do_validate and self.frmwrk.fname != "numpy" and self.numpy and mode == "forward":
@@ -160,6 +173,23 @@ class Test(object):
                     print("Failed to run {} validation.".format(self.frmwrk.info["full_name"]))
                     if not ignore_errors:
                         raise
+            
+            # Capture visualization
+            capture_viz = self.visualize and self.frmwrk.info["simple_name"].startswith("pytorch") and exec_mode == "backward"
+            if capture_viz:
+                viz_bdata = self.bench.get_data(viz_preset) if viz_preset else bdata
+                viz_context = {**viz_bdata, **self.frmwrk.imports()}
+                try:
+                    # execute and save locals
+                    self._execute(self.frmwrk, impl, impl_name, f"visualize/{exec_mode}", viz_context, 1, ignore_errors,
+                                  exec_mode=exec_mode, capture_state=True)
+                    # visualize execution
+                    self._generate_visualization(impl_name, exec_mode)
+                except Exception as exc:
+                    msg = str(exc)
+                    print(f"Failed to generate visualization for {impl_name}: {msg}")
+                    if "make sure the Graphviz executables" in msg.lower():
+                        print("You need to install graphviz (eg `brew install graphviz`).")
 
             # Main execution
             _, timelist = self._execute(self.frmwrk, impl, impl_name, f"median/{exec_mode}", context, repeat,
@@ -200,3 +230,30 @@ class Test(object):
             result = tuple(new_d.values())
             # print(result)
             util.create_result(conn, util.sql_insert_into_results_table, result)
+
+    def _generate_visualization(self, impl_name: str, exec_mode: str) -> None:
+        context = self._captured_exec_state
+        if not context:
+            return
+        loss_tensor = context.get("__npb_loss") or context.get("__npb_forward")
+        if isinstance(loss_tensor, (list, tuple)):
+            loss_tensor = sum(loss_tensor)
+        if loss_tensor is None or not hasattr(loss_tensor, "grad_fn"):
+            return
+        autodiff = self.bench.info.get("autodiff", {})
+        grad_inputs = autodiff.get("grad_inputs", [])
+        params = {}
+        prefix = self.frmwrk.info.get("prefix", "")
+        for arg in grad_inputs:
+            key = f"__npb_{prefix}_{arg}"
+            tensor = context.get(key)
+            if tensor is not None and getattr(tensor, "requires_grad", False):
+                params[arg] = tensor
+        dot = make_dot(loss_tensor, params=params or None)
+        out_dir = Path("visualizations")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        stem = f"{self.bench.bname}_{self.frmwrk.info['simple_name']}_{impl_name}_{exec_mode}"
+        output_path = out_dir / stem
+        dot.render(str(output_path), format="pdf", cleanup=True)
+        print(f"Saved visualization to {output_path.with_suffix('.pdf')}")
+        self._captured_exec_state = None
