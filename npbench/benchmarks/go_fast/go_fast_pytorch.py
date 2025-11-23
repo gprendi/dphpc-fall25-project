@@ -19,7 +19,7 @@ def body_fn(a, trace, unroll):
         trace = trace + torch.tanh(a[k, k])
     return trace
 
-UNROLL_LIST = [int(os.environ['UNROLL'])]
+UNROLL_LIST = [int(os.environ.get('UNROLL', 200))]
 
 @torch.compile(fullgraph=True, mode='reduce-overhead') # try reduce overhead
 def go_fast(a: torch.Tensor) -> torch.Tensor:
