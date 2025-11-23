@@ -19,7 +19,7 @@ class Test(object):
         self._captured_exec_state = None
 
     def _execute(self, frmwrk: Framework, impl: Callable, impl_name: str, mode: str, bdata: Dict[str, Any], repeat: int,
-                 ignore_errors: bool, exec_mode: str = "forward", capture_state: bool = False) -> Tuple[Any, Sequence[float]]:
+                 ignore_errors: bool, exec_mode: str = "forward", capture_state: bool = False, warmup: int = 3) -> Tuple[Any, Sequence[float]]:
         report_str = frmwrk.info["full_name"] + " - " + impl_name
         try:
             copy = frmwrk.copy_func()
@@ -34,13 +34,14 @@ class Test(object):
         ldict = {'__npb_impl': impl, '__npb_copy': copy, **bdata}
         try:
             out, timelist = util.benchmark(exec_str, setup_str, report_str + " - " + mode, repeat, ldict,
-                                           '__npb_result')
+                                           '__npb_result', warmup=warmup)
         except Exception as e:
             print("Failed to execute the {} implementation.".format(report_str))
             print(e)
             if not ignore_errors:
                 raise
             return None, None
+        
         if out is not None:
             if isinstance(out, (tuple, list)):
                 out = list(out)
@@ -48,12 +49,19 @@ class Test(object):
                 out = [out]
         else:
             out = []
-        if "output_args" in self.bench.info.keys():
-            num_return_args = len(out)
+        if "output_args" in self.bench.info.keys() and exec_mode == "forward":
             num_output_args = len(self.bench.info["output_args"])
-            out += [ldict[a] for a in frmwrk.inout_args(self.bench)]
-            assert len(out) == num_return_args + num_output_args, "Number of output arguments does not match."
-        
+            # out += [ldict[a] for a in frmwrk.inout_args(self.bench)]
+            print("Number of output arguments:", num_output_args, " vs ", len(out))
+            # print("Output arguments:", self.bench.info["output_args"], " vs ", out)
+            assert len(out) == num_output_args, "Number of output arguments does not match."
+        elif "autodiff" in self.bench.info.keys() and exec_mode == "backward":
+            num_input_args = len(self.bench.info["autodiff"].get("grad_inputs", []))
+            # out += [ldict[a] for a in frmwrk.inout_args(self.bench)]
+            print("Number of input arguments:", num_input_args, " vs ", len(out))
+            # print("Output grads :", self.bench.info["output_args"], " vs ", out)
+            assert len(out) == num_input_args, "Number of output grads arguments does not match."
+            
         # save locals dictionary from the execution if we're gonna visualize
         if capture_state:
             self._captured_exec_state = dict(ldict)
@@ -63,11 +71,12 @@ class Test(object):
         return out, timelist
 
     def run(self, preset: str, validate: bool, repeat: int, timeout: float = 200.0, ignore_errors: bool = False,
-            mode: str = "forward"):
+            mode: str = "forward", warmup: int = 3):
         """ Tests the framework against the benchmark.
         :param preset: The preset to use for testing (S, M, L, paper).
         :param validate: If true, it validates the output against NumPy.
         :param repeat: The number of repeatitions.
+        :param warmup: Number of warm-up executions before timing.
         """
         print("***** Testing {f} with {b} on the {p} dataset *****".format(b=self.bench.bname,
                                                                            f=self.frmwrk.info["full_name"],
@@ -192,7 +201,7 @@ class Test(object):
 
             # Main execution
             _, timelist = self._execute(self.frmwrk, impl, impl_name, f"median/{exec_mode}", context, repeat,
-                                        ignore_errors, exec_mode=exec_mode)
+                                        ignore_errors, exec_mode=exec_mode, warmup=warmup)
             if timelist:
                 for t in timelist:
                     name = impl_name if exec_mode == "forward" else f"{impl_name}:{exec_mode}"
