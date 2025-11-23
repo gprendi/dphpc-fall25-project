@@ -7,3 +7,4 @@ def kernel(alpha, A, B):
         for j in range(B.shape[1]):
             B[i, j] += np.dot(A[i + 1:, i], B[i + 1:, j])
     B *= alpha
+    return B
