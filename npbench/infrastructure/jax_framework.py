@@ -218,11 +218,13 @@ class JaxFramework(Framework):
         if base and base != "pass":
             lines.append(base)
         lines.append(f"__npb_args = ({args_tuple})")
-        lines.append(
-            f"__npb_grad_indices = ({', '.join(str(idx) for idx in grad_indices)})"
-            if grad_indices
-            else "__npb_grad_indices = tuple()"
-        )
+        if grad_indices:
+            grad_indices_str = ", ".join(str(idx) for idx in grad_indices)
+            if len(grad_indices) == 1:
+                grad_indices_str += ","
+            lines.append(f"__npb_grad_indices = ({grad_indices_str})")
+        else:
+            lines.append("__npb_grad_indices = tuple()")
         lines.append("def __npb_loss_fn(*args):")
         lines.extend(loss_lines)
         lines.append("__npb_primal, __npb_vjp_full = jax.vjp(__npb_loss_fn, *__npb_args)")
@@ -233,7 +235,13 @@ class JaxFramework(Framework):
             "__npb_vjp_warm = (__npb_vjp_warm,) if not isinstance(__npb_vjp_warm, (tuple, list)) else tuple(__npb_vjp_warm)"
         )
         lines.append(
-            "__npb_vjp_warm = tuple(jax.device_get(x) for x in jax.tree_util.tree_map(lambda x: x.block_until_ready(), __npb_vjp_warm))"
+            "__npb_vjp_warm = tuple("
+            "    jax.device_get(x if hasattr(x, 'block_until_ready') else x)"
+            "    for x in jax.tree_util.tree_map("
+            "        lambda x: x.block_until_ready() if hasattr(x, 'block_until_ready') else x,"
+            "        __npb_vjp_warm"
+            "    )"
+            ")"
         )
         return "\n".join(lines) if lines else "pass"
 
@@ -249,7 +257,7 @@ class JaxFramework(Framework):
                 "__npb_grads = (__npb_grads,) if not isinstance(__npb_grads, (tuple, list)) else tuple(__npb_grads)",
                 "__npb_selected = tuple(__npb_grads[i] for i in __npb_grad_indices) if __npb_grad_indices else tuple()",
                 # Block on device to mirror the sync we do for PyTorch CUDA, but keep grads on device
-                "__npb_selected = tuple(g.block_until_ready() for g in __npb_selected)",
+                "__npb_selected = tuple(g.block_until_ready() if hasattr(g, 'block_until_ready') else g for g in __npb_selected)",
                 "__npb_result = __npb_selected",
             ]
             return "; ".join(stmts)
