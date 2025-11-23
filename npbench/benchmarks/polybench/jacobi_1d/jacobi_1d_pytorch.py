@@ -1,5 +1,4 @@
 import torch
-from typing import Tuple
 
 # GPU: M dataset - without loop_body: 1988ms, clone in loop_body: 1014ms (JAX: 47ms)
 # GPU: paper dataset - without loop_body: 2672ms, clone in loop_body: 1350ms (JAX: 72ms)
