@@ -1,0 +1,77 @@
+Unroll factor: 10
+jax cpu devices: [CpuDevice(id=0)]
+***** Testing PyTorch CPU with go_fast on the S dataset *****
+Jax (CPU) - default - validation: 388ms
+PyTorch CPU - default - first/backward: 85689ms
+PyTorch CPU - default - default - validation: SUCCESS
+PyTorch CPU - default - median/backward: 81ms
+Unroll factor: 20
+jax cpu devices: [CpuDevice(id=0)]
+***** Testing PyTorch CPU with go_fast on the S dataset *****
+Jax (CPU) - default - validation: 228ms
+PyTorch CPU - default - first/backward: 71415ms
+PyTorch CPU - default - default - validation: SUCCESS
+PyTorch CPU - default - median/backward: 42ms
+Unroll factor: 50
+jax cpu devices: [CpuDevice(id=0)]
+***** Testing PyTorch CPU with go_fast on the S dataset *****
+Jax (CPU) - default - validation: 128ms
+PyTorch CPU - default - first/backward: 66962ms
+PyTorch CPU - default - default - validation: SUCCESS
+PyTorch CPU - default - median/backward: 19ms
+Unroll factor: 100
+jax cpu devices: [CpuDevice(id=0)]
+***** Testing PyTorch CPU with go_fast on the S dataset *****
+Jax (CPU) - default - validation: 145ms
+PyTorch CPU - default - first/backward: 71421ms
+PyTorch CPU - default - default - validation: SUCCESS
+PyTorch CPU - default - median/backward: 11ms
+Unroll factor: 200
+jax cpu devices: [CpuDevice(id=0)]
+***** Testing PyTorch CPU with go_fast on the S dataset *****
+Jax (CPU) - default - validation: 238ms
+PyTorch CPU - default - first/backward: 68447ms
+PyTorch CPU - default - default - validation: SUCCESS
+PyTorch CPU - default - median/backward: 10ms
+Unroll factor: 300
+jax cpu devices: [CpuDevice(id=0)]
+***** Testing PyTorch CPU with go_fast on the S dataset *****
+Jax (CPU) - default - validation: 126ms
+PyTorch CPU - default - first/backward: 67453ms
+PyTorch CPU - default - default - validation: SUCCESS
+PyTorch CPU - default - median/backward: 38ms
+Unroll factor: 400
+jax cpu devices: [CpuDevice(id=0)]
+***** Testing PyTorch CPU with go_fast on the S dataset *****
+Jax (CPU) - default - validation: 233ms
+PyTorch CPU - default - first/backward: 65865ms
+PyTorch CPU - default - default - validation: SUCCESS
+PyTorch CPU - default - median/backward: 15ms
+Unroll factor: 500
+jax cpu devices: [CpuDevice(id=0)]
+***** Testing PyTorch CPU with go_fast on the S dataset *****
+Jax (CPU) - default - validation: 132ms
+PyTorch CPU - default - first/backward: 71101ms
+PyTorch CPU - default - default - validation: SUCCESS
+PyTorch CPU - default - median/backward: 20ms
+Unroll factor: 1000
+jax cpu devices: [CpuDevice(id=0)]
+***** Testing PyTorch CPU with go_fast on the S dataset *****
+Jax (CPU) - default - validation: 233ms
+PyTorch CPU - default - first/backward: 71012ms
+PyTorch CPU - default - default - validation: SUCCESS
+PyTorch CPU - default - median/backward: 71ms
+Unroll factor: 1500
+jax cpu devices: [CpuDevice(id=0)]
+***** Testing PyTorch CPU with go_fast on the S dataset *****
+Jax (CPU) - default - validation: 226ms
+PyTorch CPU - default - first/backward: 73630ms
+PyTorch CPU - default - default - validation: SUCCESS
+PyTorch CPU - default - median/backward: 198ms
+Unroll factor: 2000
+jax cpu devices: [CpuDevice(id=0)]
+***** Testing PyTorch CPU with go_fast on the S dataset *****
+Jax (CPU) - default - validation: 247ms
+PyTorch CPU - default - first/backward: 71271ms
+PyTorch CPU - default - default - validation: SUCCESS
+PyTorch CPU - default - median/backward: 296ms
