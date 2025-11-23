@@ -171,9 +171,7 @@ class PytorchFramework(Framework):
         self, bench: Benchmark, impl: Callable = None, mode: str = "forward"
     ) -> str:
         base = super().setup_str(bench, impl)
-        parts = []
-        if base and base != "pass":
-            parts.append(base)
+        extra = []
         if mode == "backward":
             ad = self._autodiff(bench)
             grad_inputs = ad.get("grad_inputs", [])
@@ -181,23 +179,14 @@ class PytorchFramework(Framework):
                 if arg not in bench.info.get("array_args", []):
                     continue
                 pref = self._prefixed(bench, arg)
-                parts.append(f"{pref}.requires_grad_(True)")
-                parts.append(f"({pref}.grad.zero_() if {pref}.grad is not None else None)")
-            arg_str = self.arg_str(bench, impl)
-            parts.append(f"__npb_forward = __npb_impl({arg_str})")
-            target = ad.get("loss", {}).get("target", "result")
-            if target == "result":
-                loss_expr = (
-                    "(__npb_forward.sum() if not isinstance(__npb_forward, tuple) "
-                    "else sum(x.sum() for x in __npb_forward))"
+                extra.append(f"{pref}.requires_grad_(True)")
+                extra.append(
+                    f"({pref}.grad.zero_() if {pref}.grad is not None else None)"
                 )
-            else:
-                loss_expr = f"{self._prefixed(bench, target)}.sum()"
-            parts.append(f"__npb_loss = {loss_expr}")
-            if self._needs_sync:
-                parts.append("torch.cuda.synchronize()")
-            stmt = "; ".join(parts) if parts else "pass"
-            return stmt
+        parts = []
+        if base and base != "pass":
+            parts.append(base)
+        parts.extend(extra)
         stmt = "; ".join(parts) if parts else "pass"
         if self._needs_sync:
             sync = "torch.cuda.synchronize()"
@@ -214,6 +203,15 @@ class PytorchFramework(Framework):
         if mode == "backward":
             ad = self._autodiff(bench)
             grad_inputs = ad.get("grad_inputs", [])
+            target = ad.get("loss", {}).get("target", "result")
+            call_stmt = "__npb_forward = __npb_impl({a})".format(a=arg_str)
+            tuple_check = "__npb_forward = sum(__npb_forward) if isinstance(__npb_forward, tuple) else __npb_forward"
+            if target == "result":
+                loss_expr = "__npb_forward.sum()"
+            else:
+                loss_expr = f"{self._prefixed(bench, target)}.sum()"
+            loss_stmt = "__npb_loss = {expr}".format(expr=loss_expr)
+            backward_stmt = "__npb_loss.backward()"
             grad_exprs = []
             for arg in grad_inputs:
                 if arg not in bench.info.get("array_args", []):
@@ -225,22 +223,20 @@ class PytorchFramework(Framework):
             grads_stmt = (
                 "__npb_result = ({})".format(", ".join(grad_exprs))
                 if grad_exprs
-                else "__npb_result = tuple()"
+                else "__npb_grads = tuple()"
             )
-            stmts = []
+            # result_stmt = "__npb_result = (__npb_loss.detach(),) + tuple(__npb_grads)"
+            stmts = [call_stmt, tuple_check, loss_stmt, backward_stmt, grads_stmt]
             if self._needs_sync:
                 stmts.append("torch.cuda.synchronize()")
-            stmts.append("__npb_loss.backward()")
-            if self._needs_sync:
-                stmts.append("torch.cuda.synchronize()")
-            stmts.append(grads_stmt)
-            return "; ".join(stmts)
+            result = "; ".join(stmts)
+            return result
 
         # Forward mode with tuple check
         main_exec_str = "__npb_result = __npb_impl({a})".format(a=arg_str)
-        # tuple_check = "__npb_result = sum(__npb_result) if isinstance(__npb_result, tuple) else __npb_result"
+        tuple_check = "__npb_result = sum(__npb_result) if isinstance(__npb_result, tuple) else __npb_result"
 
-        stmts = [main_exec_str]
+        stmts = [main_exec_str, tuple_check]
         if self._needs_sync:
             stmts.append("torch.cuda.synchronize()")
 
