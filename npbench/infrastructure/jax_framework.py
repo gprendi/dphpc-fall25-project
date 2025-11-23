@@ -186,6 +186,57 @@ class JaxFramework(Framework):
     def _autodiff(self, bench: Benchmark) -> Dict[str, Any]:
         return bench.info.get("autodiff", {})
 
+    def setup_str(self, bench: Benchmark, impl: Callable = None, mode: str = "forward"):
+        base = super().setup_str(bench, impl)
+        if mode != "backward":
+            return base
+
+        ad = self._autodiff(bench)
+        input_args = bench.info.get("input_args", [])
+        grad_inputs = ad.get("grad_inputs", [])
+        grad_indices = [
+            input_args.index(arg) for arg in grad_inputs if arg in input_args
+        ]
+        arg_names = self.args(bench, impl)
+        args_tuple = ", ".join(arg_names)
+        if len(arg_names) == 1:
+            args_tuple += ","
+
+        target = ad.get("loss", {}).get("target", "result")
+        if target == "result":
+            loss_lines = [
+                "    _out = __npb_impl(*args)",
+                "    if isinstance(_out, tuple):",
+                "        return jnp.sum(jnp.stack([jnp.sum(x) for x in _out]))",
+                "    return jnp.sum(_out)",
+            ]
+        else:
+            target_index = input_args.index(target)
+            loss_lines = [f"    return jnp.sum(args[{target_index}])"]
+
+        lines = []
+        if base and base != "pass":
+            lines.append(base)
+        lines.append(f"__npb_args = ({args_tuple})")
+        lines.append(
+            f"__npb_grad_indices = ({', '.join(str(idx) for idx in grad_indices)})"
+            if grad_indices
+            else "__npb_grad_indices = tuple()"
+        )
+        lines.append("def __npb_loss_fn(*args):")
+        lines.extend(loss_lines)
+        lines.append("__npb_primal, __npb_vjp_full = jax.vjp(__npb_loss_fn, *__npb_args)")
+        lines.append("__npb_cotangent = jnp.ones_like(__npb_primal)")
+        lines.append("__npb_vjp = jax.jit(lambda ct: __npb_vjp_full(ct))")
+        lines.append("__npb_vjp_warm = __npb_vjp(__npb_cotangent)")
+        lines.append(
+            "__npb_vjp_warm = (__npb_vjp_warm,) if not isinstance(__npb_vjp_warm, (tuple, list)) else tuple(__npb_vjp_warm)"
+        )
+        lines.append(
+            "__npb_vjp_warm = tuple(jax.device_get(x) for x in jax.tree_util.tree_map(lambda x: x.block_until_ready(), __npb_vjp_warm))"
+        )
+        return "\n".join(lines) if lines else "pass"
+
     def exec_str(self, bench: Benchmark, impl: Callable = None, mode: str = "forward"):
         """Generates the execution-string that should be used to call
         the benchmark implementation.
@@ -193,38 +244,13 @@ class JaxFramework(Framework):
         :param impl: A benchmark implementation.
         """
         if mode == "backward":
-            ad = self._autodiff(bench)
-            input_args = bench.info.get("input_args", [])
-            grad_inputs = ad.get("grad_inputs", [])
-            grad_indices = [
-                input_args.index(arg) for arg in grad_inputs if arg in input_args
-            ]
-            argnums_str = (
-                "("
-                + ", ".join(str(idx) for idx in grad_indices)
-                + ("," if len(grad_indices) == 1 else "")
-                + ")"
-                if grad_indices
-                else "()"
-            )
-            arg_names = self.args(bench, impl)
-            args_tuple = ", ".join(arg_names)
-            if len(arg_names) == 1:
-                args_tuple += ","
-            loss_target = ad.get("loss", {}).get("target", "result")
-            if loss_target == "result":
-                loss_expr = "(lambda r: jnp.sum(sum(r)) if isinstance(r, tuple) else jnp.sum(r))(__npb_impl(*args))"
-            else:
-                target_index = input_args.index(loss_target)
-                loss_expr = f"jnp.sum(args[{target_index}])"
             stmts = [
-                f"__npb_args = ({args_tuple})",
-                f"__npb_loss_fn = lambda *args: {loss_expr}",
-                f"__npb_loss, __npb_grads = jax.value_and_grad(__npb_loss_fn, argnums={argnums_str})(*__npb_args)",
+                "__npb_grads = __npb_vjp(__npb_cotangent)",
                 "__npb_grads = (__npb_grads,) if not isinstance(__npb_grads, (tuple, list)) else tuple(__npb_grads)",
-                "__npb_loss = __npb_loss.block_until_ready()",
-                "__npb_grads = tuple(g.block_until_ready() for g in __npb_grads)",
-                "__npb_result = tuple(jax.device_get(g) for g in __npb_grads)",
+                "__npb_selected = tuple(__npb_grads[i] for i in __npb_grad_indices) if __npb_grad_indices else tuple()",
+                # Block on device to mirror the sync we do for PyTorch CUDA, but keep grads on device
+                "__npb_selected = tuple(g.block_until_ready() for g in __npb_selected)",
+                "__npb_result = __npb_selected",
             ]
             return "; ".join(stmts)
 

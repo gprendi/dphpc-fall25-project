@@ -19,7 +19,7 @@ class Test(object):
         self._captured_exec_state = None
 
     def _execute(self, frmwrk: Framework, impl: Callable, impl_name: str, mode: str, bdata: Dict[str, Any], repeat: int,
-                 ignore_errors: bool, exec_mode: str = "forward", capture_state: bool = False, warmup: int = 0) -> Tuple[Any, Sequence[float]]:
+                 ignore_errors: bool, exec_mode: str = "forward", capture_state: bool = False, warmup: int = 3) -> Tuple[Any, Sequence[float]]:
         report_str = frmwrk.info["full_name"] + " - " + impl_name
         try:
             copy = frmwrk.copy_func()
@@ -63,7 +63,7 @@ class Test(object):
         return out, timelist
 
     def run(self, preset: str, validate: bool, repeat: int, timeout: float = 200.0, ignore_errors: bool = False,
-            mode: str = "forward", warmup: int = 0):
+            mode: str = "forward", warmup: int = 3):
         """ Tests the framework against the benchmark.
         :param preset: The preset to use for testing (S, M, L, paper).
         :param validate: If true, it validates the output against NumPy.

@@ -132,7 +132,7 @@ def inner(_it, _timer{init}):
 """
 
 
-def benchmark(stmt, setup="pass", out_text="", repeat=1, context={}, output=None, verbose=True, warmup: int = 0):
+def benchmark(stmt, setup="pass", out_text="", repeat=1, context={}, output=None, verbose=True, warmup: int = 3):
 
     ldict = {**context}
     timer = timeit.Timer(stmt, setup=setup, globals=ldict)
