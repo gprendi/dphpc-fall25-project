@@ -185,15 +185,17 @@ def plot_speedup_heatmap(medians: pd.DataFrame, labels: Dict[str, str],
 
     # Compute ratio tables
     ratio_tables = {}
+    baseline_times = {}
     for mode in EXEC_MODES:
         base = pivot[(baseline, mode)]
         ratios = {}
         for framework in frameworks:
             ratios[framework] = base / pivot[(framework, mode)]
         ratio_tables[mode] = pd.DataFrame(ratios).reindex(benches)
+        baseline_times[mode] = base.reindex(benches)
 
     # ----- helper to plot one mode -----
-    def _plot_single(mode: str, df: pd.DataFrame):
+    def _plot_single(mode: str, df: pd.DataFrame, base_times: pd.Series):
         fig_width = max(6, len(frameworks) * 1.4)
         fig_height = max(4, len(benches) * 0.5)
 
@@ -221,8 +223,14 @@ def plot_speedup_heatmap(medians: pd.DataFrame, labels: Dict[str, str],
         for i, bench in enumerate(benches):
             for j, framework in enumerate(frameworks):
                 value = df.iloc[i, j]
+                label = my_speedup_abbr(value)
+                if framework == baseline:
+                    runtime_ms = base_times.iloc[i]
+                    label = ""
+                    if not math.isnan(runtime_ms):
+                        label = my_runtime_abbr(runtime_ms / 1000.0)
                 ax.text(
-                    j, i, my_speedup_abbr(value),
+                    j, i, label,
                     ha="center", va="center", color="black"
                 )
 
@@ -232,8 +240,8 @@ def plot_speedup_heatmap(medians: pd.DataFrame, labels: Dict[str, str],
         plt.close(fig)
 
     # ----- generate 2 separate PNGs -----
-    _plot_single("forward", ratio_tables["forward"])
-    _plot_single("backward", ratio_tables["backward"])
+    _plot_single("forward", ratio_tables["forward"], baseline_times["forward"])
+    _plot_single("backward", ratio_tables["backward"], baseline_times["backward"])
 
 
 def plot_runtime_bars(medians: pd.DataFrame, labels: Dict[str, str],

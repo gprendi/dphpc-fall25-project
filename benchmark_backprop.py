@@ -4,9 +4,33 @@ from multiprocessing import Process, set_start_method
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-DEFAULT_FRAMEWORKS: Tuple[str, ...] = ("jax_cpu", "jax_gpu", "pytorch_cpu",
-                                       "pytorch_gpu")
-DEFAULT_MODES: Tuple[str, ...] = ("forward", "backward")
+DEFAULT_FRAMEWORKS: Tuple[str, ...] = ("jax_cpu", "jax_gpu", "pytorch_cpu", "pytorch_gpu")
+DEFAULT_MODES: Tuple[str, ...] = ("backward", )#, "forward")
+# Kernels with PyTorch autodiff implementations; serves as default bench set.
+DEFAULT_BENCHMARKS: Tuple[str, ...] = (
+    "go_fast",
+    "heat_3d",
+    "fdtd_2d",
+    # "k2mm",
+    # "k3mm",
+    # "atax",
+    # "go_fast",
+    # "gemm",
+    # "gemver",
+    # "gesummv",
+    # "mvt",
+    # "symm", -> torch loop
+    # "syr2k",
+    # "syrk",
+    # "trmm",
+    # "cholesky2",
+    # "compute",
+    # "doitgen",
+    # "hdiff",
+    # "jacobi_1d",
+    # "seidel_2d",
+    # "softmax",
+)
 
 try:
     set_start_method("spawn")
@@ -78,7 +102,8 @@ def _validate_frameworks(
 
 def _run_combo(benchname: str, framework_name: str, preset: str, validate: bool,
                repeat: int, timeout: float, ignore_errors: bool,
-               modes: Sequence[str], baseline_framework: Optional[str]) -> None:
+               modes: Sequence[str], baseline_framework: Optional[str],
+               warmup: int) -> None:
     """Execute a benchmark/framework pair for every requested mode."""
     from npbench.infrastructure import (Benchmark, LineCount, Test,
                                         generate_framework)
@@ -158,6 +183,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--baseline-framework",
                         default="jax_cpu",
                         help="Framework used for backward validation.")
+    parser.add_argument("--allow-gpu-baseline",
+                        action="store_true",
+                        help="Allow GPU-based baseline frameworks (defaults to CPU to avoid OOM).")
     parser.add_argument("--bench-info-dir",
                         default="bench_info",
                         help="Directory containing benchmark metadata JSON files.")
@@ -172,6 +200,15 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = _parse_args()
+    if (not args.allow_gpu_baseline
+            and args.baseline_framework.lower().endswith("_gpu")):
+        candidate = args.baseline_framework[:-4] + "_cpu"
+        print(
+            f"GPU baselines are disabled by default, switching baseline framework "
+            f"from '{args.baseline_framework}' to '{candidate}'. "
+            "Use --allow-gpu-baseline to override."
+        )
+        args.baseline_framework = candidate
     bench_dir = Path(args.bench_info_dir)
     if not bench_dir.is_dir():
         print(f"Benchmark info directory '{bench_dir}' does not exist.")
@@ -192,7 +229,19 @@ def main() -> int:
     if args.benchmarks:
         bench_selection = args.benchmarks
     else:
-        bench_selection = list(bench_map.keys())
+        bench_selection = [
+            bench for bench in DEFAULT_BENCHMARKS if bench in bench_map
+        ]
+        missing_defaults = [
+            bench for bench in DEFAULT_BENCHMARKS if bench not in bench_map
+        ]
+        if missing_defaults:
+            print(
+                "Warning: the following default benchmarks are unavailable and "
+                f"will be skipped: {', '.join(missing_defaults)}")
+        if not bench_selection:
+            print("No default benchmarks available; falling back to all.")
+            bench_selection = list(bench_map.keys())
     requested_benches = _unique(bench_selection)
     missing = [b for b in requested_benches if b not in bench_map]
     if missing:
