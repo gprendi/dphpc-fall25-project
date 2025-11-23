@@ -21,7 +21,7 @@
         },
         "input_args": ["A", "B", "C", "D"],
         "array_args": ["A", "B", "C", "D"],
-        "output_args": [],
+        "output_args": ["result"],
         "autodiff": {
             "loss": {
                 "type": "sum",

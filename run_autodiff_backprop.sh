@@ -13,10 +13,10 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MODE="backward"
+MODES=("forward" "backward")
 FRAMEWORK="pytorch_cpu"
 PRESET="S"
-REPEAT=5
+REPEAT=2
 TIMEOUT=200
 VALIDATE="true"
 EXTRA_ARGS=()
@@ -74,7 +74,6 @@ if [[ ${#AUTODIFF_ROWS[@]} -eq 0 ]]; then
     exit 0
 fi
 
-echo "Autodiff-enabled benchmarks (will run in ${MODE} mode):"
 BENCHES=()
 for row in "${AUTODIFF_ROWS[@]}"; do
     IFS="|" read -r bench_id short_name full_name <<< "${row}"
@@ -83,19 +82,22 @@ for row in "${AUTODIFF_ROWS[@]}"; do
 done
 
 echo
-for bench in "${BENCHES[@]}"; do
-    echo ">>> Running ${bench}..."
-    CMD=("${UV_PYTHON[@]}" "${REPO_ROOT}/run_benchmark.py"
-        -b "${bench}"
-        -f "${FRAMEWORK}"
-        -m "${MODE}"
-        -p "${PRESET}"
-        -r "${REPEAT}"
-        -t "${TIMEOUT}"
-        -v "${VALIDATE}")
-    if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
-        CMD+=("${EXTRA_ARGS[@]}")
-    fi
-    "${CMD[@]}"
-    echo
+for mode in "${MODES[@]}"; do
+    echo "Autodiff-enabled benchmarks (will run in $mode mode):"
+    for bench in "${BENCHES[@]}"; do
+        echo ">>> Running ${bench}..."
+        CMD=("${UV_PYTHON[@]}" "${REPO_ROOT}/run_benchmark.py"
+            -b "${bench}"
+            -f "${FRAMEWORK}"
+            -m "${mode}"
+            -p "${PRESET}"
+            -r "${REPEAT}"
+            -t "${TIMEOUT}"
+            -v "${VALIDATE}")
+        if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
+            CMD+=("${EXTRA_ARGS[@]}")
+        fi
+        "${CMD[@]}"
+        echo
+    done
 done
