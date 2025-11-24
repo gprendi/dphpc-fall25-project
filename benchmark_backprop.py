@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 DEFAULT_FRAMEWORKS: Tuple[str, ...] = ("jax_cpu", "jax_gpu", "pytorch_cpu", "pytorch_gpu")
-DEFAULT_MODES: Tuple[str, ...] = ("backward", )#, "forward")
+DEFAULT_MODES: Tuple[str, ...] = ("backward", "forward")
 # Kernels with PyTorch autodiff implementations; serves as default bench set.
 DEFAULT_BENCHMARKS: Tuple[str, ...] = (
     "go_fast",
@@ -163,7 +163,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("-t",
                         "--timeout",
                         type=float,
-                        default=200.0,
+                        default=1000.0,
                         help="Timeout (seconds) for each benchmark execution.")
     parser.add_argument("-m",
                         "--modes",
