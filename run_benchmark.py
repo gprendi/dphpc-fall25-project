@@ -1,4 +1,10 @@
 import argparse
+import warnings
+warnings.filterwarnings(
+    "ignore",
+    message="pkg_resources is deprecated as an API",
+    category=UserWarning,
+)
 
 from npbench.infrastructure import (Benchmark, generate_framework, LineCount,
                                     Test, utilities as util)
@@ -61,7 +67,7 @@ if __name__ == "__main__":
                                 save_strict=args["save_strict_sdfg"],
                                 load_strict=args["load_strict_sdfg"])
     numpy = generate_framework("numpy")
-    
+
     lcount = LineCount(bench, frmwrk, numpy)
     lcount.count()
 

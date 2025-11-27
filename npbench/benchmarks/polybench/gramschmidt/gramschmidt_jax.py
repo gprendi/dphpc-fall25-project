@@ -1,11 +1,12 @@
 import jax
 import jax.numpy as jnp
+from functools import partial
 
-@jax.jit
-def kernel(A):
+@partial(jax.jit, static_argnums=(1, 2))
+def kernel(A, row, column):
 
     Q = jnp.zeros_like(A)
-    R = jnp.zeros((A.shape[1], A.shape[1]), dtype=A.dtype)
+    R = jnp.zeros((column, column), dtype=A.dtype)
 
     def body_fun(k, arrays):
         Q, R, A = arrays
@@ -16,13 +17,19 @@ def kernel(A):
 
         def inner_body_fun(j, arrays):
             Q, R, A = arrays
-            R = R.at[k, j].set(jnp.dot(Q[:, k], A[:, j]))
-            A = A.at[:, j].add(-Q[:, k] * R[k, j])
-            return Q, R, A
 
-        Q, R, A = jax.lax.fori_loop(k + 1, A.shape[1], inner_body_fun, (Q, R, A))
+            def update(arrays):
+                Q, R, A = arrays
+                r = jnp.dot(Q[:, k], A[:, j])
+                R = R.at[k, j].set(r)
+                A = A.at[:, j].add(-Q[:, k] * r)
+                return Q, R, A
+
+            return jax.lax.cond(j > k, update, lambda arrays: arrays, (Q, R, A))
+
+        Q, R, A = jax.lax.fori_loop(0, column, inner_body_fun, (Q, R, A))
         return Q, R, A
 
-    Q, R, A = jax.lax.fori_loop(0, A.shape[1], body_fun, (Q, R, A))
+    Q, R, A = jax.lax.fori_loop(0, column, body_fun, (Q, R, A))
 
     return Q, R
