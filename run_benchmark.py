@@ -17,7 +17,7 @@ if __name__ == "__main__":
                         default="numpy")
     parser.add_argument("-p",
                         "--preset",
-                        choices=['S', 'M', 'L', 'paper'],
+                        choices=['S', 'M', 'L', 'paper', 'viz'],
                         nargs="?",
                         default='S')
     parser.add_argument("-m",
@@ -61,7 +61,7 @@ if __name__ == "__main__":
                                 save_strict=args["save_strict_sdfg"],
                                 load_strict=args["load_strict_sdfg"])
     numpy = generate_framework("numpy")
-    
+
     lcount = LineCount(bench, frmwrk, numpy)
     lcount.count()
 
