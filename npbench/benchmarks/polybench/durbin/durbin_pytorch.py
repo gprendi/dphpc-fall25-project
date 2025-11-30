@@ -7,7 +7,7 @@ def kernel(r):
     alpha = -r[0].clone()
     beta = torch.tensor([1.0], dtype=r.dtype, device=r.device)
     y[0] = -r[0]
-    
+
     @torch.compile
     def loop_body(k, loop_vars):
         alpha, beta, y, r = loop_vars
