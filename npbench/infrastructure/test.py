@@ -41,7 +41,7 @@ class Test(object):
             if not ignore_errors:
                 raise
             return None, None
-        
+
         if out is not None:
             if isinstance(out, (tuple, list)):
                 out = list(out)
@@ -52,16 +52,16 @@ class Test(object):
         if "output_args" in self.bench.info.keys() and exec_mode == "forward":
             num_output_args = len(self.bench.info["output_args"])
             # out += [ldict[a] for a in frmwrk.inout_args(self.bench)]
-            print("Number of output arguments:", num_output_args, " vs ", len(out))
+            # print("Number of output arguments:", num_output_args, " vs ", len(out))
             # print("Output arguments:", self.bench.info["output_args"], " vs ", out)
-            assert len(out) == num_output_args, "Number of output arguments does not match."
+            assert len(out) == num_output_args, str("Number of output arguments does not match.", "Number of output arguments:", num_output_args, " vs ", len(out))
         elif "autodiff" in self.bench.info.keys() and exec_mode == "backward":
             num_input_args = len(self.bench.info["autodiff"].get("grad_inputs", []))
             # out += [ldict[a] for a in frmwrk.inout_args(self.bench)]
-            print("Number of input arguments:", num_input_args, " vs ", len(out))
+            # print("Number of input arguments:", num_input_args, " vs ", len(out))
             # print("Output grads :", self.bench.info["output_args"], " vs ", out)
-            assert len(out) == num_input_args, "Number of output grads arguments does not match."
-            
+            assert len(out) == num_input_args, str("Number of output grads arguments does not match.", "Number of input arguments:", num_input_args, " vs ", len(out))
+
         # save locals dictionary from the execution if we're gonna visualize
         if capture_state:
             self._captured_exec_state = dict(ldict)
@@ -181,7 +181,7 @@ class Test(object):
                     print("Failed to run {} validation.".format(self.frmwrk.info["full_name"]))
                     if not ignore_errors:
                         raise
-            
+
             # Capture visualization
             capture_viz = self.visualize and self.frmwrk.info["simple_name"].startswith("pytorch") and exec_mode == "backward"
             if capture_viz:
