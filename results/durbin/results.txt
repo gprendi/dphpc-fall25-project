@@ -1,0 +1,16 @@
+(dphpc-fall25-project) baraq@student-net-cx-1275 dphpc-fall25-project % uv run run_benchmark.py -b durbin -f pytorch_cpu -p M -m backward
+jax cpu devices: [CpuDevice(id=0)]
+***** Testing PyTorch CPU with durbin on the M dataset *****
+Jax (CPU) - default - validation: 126ms
+PyTorch CPU - default - first/backward: 751ms
+PyTorch CPU - default - default - validation: SUCCESS
+PyTorch CPU - default - median/backward: 751ms
+(dphpc-fall25-project) baraq@student-net-cx-1275 dphpc-fall25-project % uv run run_benchmark.py -b durbin -f jax_cpu -p M -m backward
+jax cpu devices: [CpuDevice(id=0)]
+jax cpu devices: [CpuDevice(id=0)]
+***** Testing Jax (CPU) with durbin on the M dataset *****
+Jax (CPU) - default - validation: 121ms
+Jax (CPU) - default - first/backward: 135ms
+Jax (CPU) - default - default - validation: SUCCESS
+Jax (CPU) - default - median/backward: 123ms
+(dphpc-fall25-project) baraq@student-net-cx-1275 dphpc-fall25-project %
