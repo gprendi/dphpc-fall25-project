@@ -1,7 +1,15 @@
 # Copyright 2021 ETH Zurich and the NPBench authors. All rights reserved.
 import json
-import numpy as np
 import pathlib
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message=r"pkg_resources is deprecated as an API.*",
+)
+
+import numpy as np
 import pkg_resources
 
 from npbench.infrastructure import Benchmark
@@ -39,12 +47,12 @@ class Framework(object):
         return {}
 
     def copy_func(self) -> Callable:
-        """ Returns the copy-method that should be used 
+        """ Returns the copy-method that should be used
         for copying the benchmark arguments. """
         return np.copy
-    
+
     def copy_back_func(self) -> Callable:
-        """ Returns the copy-method that should be used 
+        """ Returns the copy-method that should be used
         for copying the benchmark outputs back to the host. """
         return lambda x: x
 
@@ -104,7 +112,7 @@ class Framework(object):
         """
 
         return ["__npb_{pr}_{a}".format(pr=self.info["prefix"], a=a) for a in bench.info["array_args"]]
-    
+
 
     def inout_args(self, bench: Benchmark, impl: Callable = None):
         """ Generates the input/output arguments that should be checked during
@@ -114,7 +122,7 @@ class Framework(object):
         """
 
         return ["__npb_{pr}_{a}".format(pr=self.info["prefix"], a=a) for a in bench.info["output_args"]]
-    
+
 
     def arg_str(self, bench: Benchmark, impl: Callable = None):
         """ Generates the argument-string that should be used for calling
