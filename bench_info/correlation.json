@@ -21,6 +21,13 @@
         },
         "input_args": ["M", "float_n", "data"],
         "array_args": ["data"],
-        "output_args": []
+        "output_args": ["corr"],
+        "autodiff": {
+        "loss": {
+            "type": "sum",
+            "target": "result"
+        },
+        "grad_inputs": ["data"]
+        }
     }
 }
