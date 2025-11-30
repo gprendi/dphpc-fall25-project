@@ -1,7 +1,7 @@
 visualizations
 npbench.db
 torchgraphcache
-npbench.db
+tl_out
 
 # Virtual environment
 .venv/
