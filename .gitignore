@@ -1,5 +1,6 @@
 visualizations
 npbench.db
+torchgraphcache
 
 # Virtual environment
 .venv/

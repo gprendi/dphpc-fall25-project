@@ -22,7 +22,7 @@ def body_fn(a, trace, unroll):
     return trace
 
 
-UNROLL_LIST = [int(os.environ.get("UNROLL", 50))]
+UNROLL_LIST = [int(os.environ.get("UNROLL", 2))]
 
 
 # @torch.compile(mode='reduce-overhead') # try reduce overhead
