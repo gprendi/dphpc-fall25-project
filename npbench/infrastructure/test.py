@@ -54,13 +54,19 @@ class Test(object):
             # out += [ldict[a] for a in frmwrk.inout_args(self.bench)]
             # print("Number of output arguments:", num_output_args, " vs ", len(out))
             # print("Output arguments:", self.bench.info["output_args"], " vs ", out)
-            assert len(out) == num_output_args, str("Number of output arguments does not match.", "Number of output arguments:", num_output_args, " vs ", len(out))
+            assert len(out) == num_output_args, (
+                f"Number of output arguments does not match: "
+                f"{num_output_args} vs {len(out)}"
+            )
         elif "autodiff" in self.bench.info.keys() and exec_mode == "backward":
             num_input_args = len(self.bench.info["autodiff"].get("grad_inputs", []))
             # out += [ldict[a] for a in frmwrk.inout_args(self.bench)]
             # print("Number of input arguments:", num_input_args, " vs ", len(out))
             # print("Output grads :", self.bench.info["output_args"], " vs ", out)
-            assert len(out) == num_input_args, str("Number of output grads arguments does not match.", "Number of input arguments:", num_input_args, " vs ", len(out))
+            assert len(out) == num_input_args, (
+                f"Number of output grads arguments does not match: "
+                f"{num_input_args} vs {len(out)}"
+            )
 
         # save locals dictionary from the execution if we're gonna visualize
         if capture_state:
