@@ -49,7 +49,7 @@ class JaxFramework(Framework):
         else:
             # default to CPU device
             cpu_devices = jax.devices("cpu")
-            print("jax cpu devices:", cpu_devices)
+            # print("jax cpu devices:", cpu_devices)
             if not cpu_devices:
                 raise RuntimeError("JAX CPU framework requested but no CPU device is available")
             self._device = cpu_devices[0]
