@@ -12,7 +12,8 @@
             "S": { "N": 2000 },
             "M": { "N": 5000 },
             "L": { "N": 14000 },
-            "paper": { "N": 16000 }
+            "paper": { "N": 16000 },
+            "visualize": { "N": 20 }
         },
         "init": {
             "func_name": "initialize",
@@ -21,6 +22,13 @@
         },
         "input_args": ["L", "x", "b"],
         "array_args": ["L", "x", "b"],
-        "output_args": ["b"]
+        "output_args": ["x"],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["x"]
+        }
     }
 }
