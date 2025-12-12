@@ -32,6 +32,7 @@ class Test(object):
                 raise
             return None, None
         ldict = {'__npb_impl': impl, '__npb_copy': copy, **bdata}
+        ldict["__npb_collect_output"] = (repeat == 1)
         try:
             out, timelist = util.benchmark(exec_str, setup_str, report_str + " - " + mode, repeat, ldict,
                                            '__npb_result', warmup=warmup)
@@ -59,21 +60,22 @@ class Test(object):
                 f"{num_output_args} vs {len(out)}"
             )
         elif "autodiff" in self.bench.info.keys() and exec_mode == "backward":
-            num_input_args = len(self.bench.info["autodiff"].get("grad_inputs", []))
-            # out += [ldict[a] for a in frmwrk.inout_args(self.bench)]
-            # print("Number of input arguments:", num_input_args, " vs ", len(out))
-            # print("Output grads :", self.bench.info["output_args"], " vs ", out)
-            assert len(out) == num_input_args, (
-                f"Number of output grads arguments does not match: "
-                f"{num_input_args} vs {len(out)}"
-            )
+            if repeat == 1:
+                num_input_args = len(self.bench.info["autodiff"].get("grad_inputs", []))
+                # out += [ldict[a] for a in frmwrk.inout_args(self.bench)]
+                # print("Number of input arguments:", num_input_args, " vs ", len(out))
+                # print("Output grads :", self.bench.info["output_args"], " vs ", out)
+                assert len(out) == num_input_args, (
+                    f"Number of output grads arguments does not match: "
+                    f"{num_input_args} vs {len(out)}"
+                )
 
         # save locals dictionary from the execution if we're gonna visualize
         if capture_state:
             self._captured_exec_state = dict(ldict)
         else:
             self._captured_exec_state = None
-
+        
         return out, timelist
 
     def run(self, preset: str, validate: bool, repeat: int, timeout: float = 200.0, ignore_errors: bool = False,
