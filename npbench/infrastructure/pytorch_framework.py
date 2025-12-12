@@ -220,25 +220,23 @@ class PytorchFramework(Framework):
                     continue
                 pref = self._prefixed(bench, arg)
                 grad_exprs.append(
-                    f"({pref}.grad.detach().clone() if {pref}.grad is not None else None)"
+                    f"({pref}.grad.detach() if {pref}.grad is not None else None)"
                 )
-            grads_stmt = (
-                "__npb_result = ({})".format(", ".join(grad_exprs))
-                if grad_exprs
-                else "__npb_result = tuple()"
-            )
             stmts = []
             if self._needs_sync:
                 stmts.append("torch.cuda.synchronize()")
             stmts.append("__npb_loss.backward()")
             if self._needs_sync:
                 stmts.append("torch.cuda.synchronize()")
-            stmts.append(grads_stmt)
+            stmts.append(
+                f"__npb_result = ({', '.join(grad_exprs)}) if __npb_collect_output else tuple()"
+                if grad_exprs
+                else "__npb_result = tuple()"
+            )
             return "; ".join(stmts)
 
         # Forward mode with tuple check
         main_exec_str = "__npb_result = __npb_impl({a})".format(a=arg_str)
-        # tuple_check = "__npb_result = sum(__npb_result) if isinstance(__npb_result, tuple) else __npb_result"
 
         stmts = [main_exec_str]
         if self._needs_sync:
