@@ -185,65 +185,82 @@ class JaxFramework(Framework):
 
     def _autodiff(self, bench: Benchmark) -> Dict[str, Any]:
         return bench.info.get("autodiff", {})
+    
+    def _prefixed(self, bench: Benchmark, arg: str) -> str:
+        if arg in bench.info.get("array_args", []):
+            return f"__npb_{self.info['prefix']}_{arg}"
+        return arg
 
     def setup_str(self, bench: Benchmark, impl: Callable = None, mode: str = "forward"):
         base = super().setup_str(bench, impl)
-        if mode != "backward":
-            return base
-
-        ad = self._autodiff(bench)
-        input_args = bench.info.get("input_args", [])
-        grad_inputs = ad.get("grad_inputs", [])
-        grad_indices = [
-            input_args.index(arg) for arg in grad_inputs if arg in input_args
-        ]
-        arg_names = self.args(bench, impl)
-        args_tuple = ", ".join(arg_names)
-        if len(arg_names) == 1:
-            args_tuple += ","
-
-        target = ad.get("loss", {}).get("target", "result")
-        if target == "result":
-            loss_lines = [
-                "    _out = __npb_impl(*args)",
-                "    if isinstance(_out, tuple):",
-                "        return jnp.sum(jnp.stack([jnp.sum(x) for x in _out]))",
-                "    return jnp.sum(_out)",
+        if mode == "backward":
+            ad = self._autodiff(bench)
+            input_args = bench.info.get("input_args", [])
+            grad_inputs = ad.get("grad_inputs", [])
+            grad_indices = [
+                input_args.index(arg) for arg in grad_inputs if arg in input_args
             ]
-        else:
-            target_index = input_args.index(target)
-            loss_lines = [f"    return jnp.sum(args[{target_index}])"]
+            arg_names = self.args(bench, impl)
+            args_tuple = ", ".join(arg_names)
+            if len(arg_names) == 1:
+                args_tuple += ","
 
-        lines = []
-        if base and base != "pass":
-            lines.append(base)
-        lines.append(f"__npb_args = ({args_tuple})")
-        if grad_indices:
-            grad_indices_str = ", ".join(str(idx) for idx in grad_indices)
-            if len(grad_indices) == 1:
-                grad_indices_str += ","
-            lines.append(f"__npb_grad_indices = ({grad_indices_str})")
+            target = ad.get("loss", {}).get("target", "result")
+            if target == "result":
+                loss_lines = [
+                    "    _out = __npb_impl(*args)",
+                    "    if isinstance(_out, tuple):",
+                    "        return jnp.sum(jnp.stack([jnp.sum(x) for x in _out]))",
+                    "    return jnp.sum(_out)",
+                ]
+            else:
+                target_index = input_args.index(target)
+                loss_lines = [f"    return jnp.sum(args[{target_index}])"]
+
+            lines = []
+            if base and base != "pass":
+                lines.append(base)
+            lines.append(f"__npb_args = ({args_tuple})")
+            if grad_indices:
+                grad_indices_str = ", ".join(str(idx) for idx in grad_indices)
+                if len(grad_indices) == 1:
+                    grad_indices_str += ","
+                lines.append(f"__npb_grad_indices = ({grad_indices_str})")
+            else:
+                lines.append("__npb_grad_indices = tuple()")
+            lines.append("def __npb_loss_fn(*args):")
+            lines.extend(loss_lines)
+            lines.append("__npb_primal, __npb_vjp_full = jax.vjp(__npb_loss_fn, *__npb_args)")
+            lines.append("__npb_cotangent = jnp.ones_like(__npb_primal)")
+            lines.append("__npb_vjp = jax.jit(lambda ct: __npb_vjp_full(ct))")
+            lines.append("__npb_vjp_warm = __npb_vjp(__npb_cotangent)")
+            lines.append(
+                "__npb_vjp_warm = (__npb_vjp_warm,) if not isinstance(__npb_vjp_warm, (tuple, list)) else tuple(__npb_vjp_warm)"
+            )
+            lines.append(
+                "__npb_vjp_warm = tuple("
+                "    jax.device_get(x if hasattr(x, 'block_until_ready') else x)"
+                "    for x in jax.tree_util.tree_map("
+                "        lambda x: x.block_until_ready() if hasattr(x, 'block_until_ready') else x,"
+                "        __npb_vjp_warm"
+                "    )"
+                ")"
+            )
+            return "\n".join(lines) if lines else "pass"
         else:
-            lines.append("__npb_grad_indices = tuple()")
-        lines.append("def __npb_loss_fn(*args):")
-        lines.extend(loss_lines)
-        lines.append("__npb_primal, __npb_vjp_full = jax.vjp(__npb_loss_fn, *__npb_args)")
-        lines.append("__npb_cotangent = jnp.ones_like(__npb_primal)")
-        lines.append("__npb_vjp = jax.jit(lambda ct: __npb_vjp_full(ct))")
-        lines.append("__npb_vjp_warm = __npb_vjp(__npb_cotangent)")
-        lines.append(
-            "__npb_vjp_warm = (__npb_vjp_warm,) if not isinstance(__npb_vjp_warm, (tuple, list)) else tuple(__npb_vjp_warm)"
-        )
-        lines.append(
-            "__npb_vjp_warm = tuple("
-            "    jax.device_get(x if hasattr(x, 'block_until_ready') else x)"
-            "    for x in jax.tree_util.tree_map("
-            "        lambda x: x.block_until_ready() if hasattr(x, 'block_until_ready') else x,"
-            "        __npb_vjp_warm"
-            "    )"
-            ")"
-        )
-        return "\n".join(lines) if lines else "pass"
+            parts = []
+            if base and base != "pass":
+                parts.append(base)
+
+            # block on all device-copied array inputs
+            arrs = [self._prefixed(bench, a) for a in bench.info.get("array_args", [])]
+            if arrs:
+                parts.append(
+                    "__npb_sync = [x.block_until_ready() if hasattr(x,'block_until_ready') else x "
+                    f"for x in [{', '.join(arrs)}]]"
+                )
+
+            return "\n".join(parts) if parts else "pass"
 
     def exec_str(self, bench: Benchmark, impl: Callable = None, mode: str = "forward"):
         """Generates the execution-string that should be used to call
