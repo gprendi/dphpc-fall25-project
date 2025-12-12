@@ -3,7 +3,7 @@
 import jax
 import jax.numpy as jnp
 
-# @jax.jit
+@jax.jit
 def go_fast(a: jax.Array):
     trace = 0.0
     def body_fn(i, trace):

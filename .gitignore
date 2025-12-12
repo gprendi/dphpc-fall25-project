@@ -1,5 +1,5 @@
 visualizations
-npbench.db
+npbench*.db
 torchgraphcache
 tl_out
 

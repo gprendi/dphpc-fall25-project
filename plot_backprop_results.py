@@ -1,6 +1,8 @@
 import argparse
+import calendar
 import json
 import math
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -12,6 +14,21 @@ import pandas as pd
 from npbench.infrastructure import utilities as util
 
 EXEC_MODES = ("forward", "backward")
+
+
+def default_results_subdir_name(now: datetime | None = None) -> str:
+    """Default subfolder name for plot outputs.
+
+    Format: 12-Dec-2:27pm
+    """
+    if now is None:
+        now = datetime.now()
+    day = str(now.day)
+    month = calendar.month_abbr[now.month]
+    hour_12 = now.strftime("%I").lstrip("0") or "12"
+    minute = now.strftime("%M")
+    ampm = now.strftime("%p").lower()
+    return f"{day}-{month}-{hour_12}:{minute}{ampm}"
 
 def _plot_stacked_bars(
     benches, frameworks, forward_times, backward_times,
@@ -360,6 +377,7 @@ def plot_runtime_boxplots(filtered: pd.DataFrame, frameworks: List[str],
 def main():
     parser = argparse.ArgumentParser(
         description="Visualise GPU backprop benchmark results.")
+    
     parser.add_argument("-p",
                         "--preset",
                         choices=["S", "M", "L", "paper"],
@@ -369,6 +387,15 @@ def main():
                         "--output-dir",
                         default="ad_plots",
                         help="Directory for generated figures.")
+    parser.add_argument(
+        "--results-subdir",
+        "-r",
+        default=default_results_subdir_name(),
+        help=(
+            "Subfolder name under --output-dir for all generated files. "
+            "Defaults to a timestamp like 12-Dec-2:27pm."
+        ),
+    )
     parser.add_argument("-f",
                         "--frameworks",
                         nargs="+",
@@ -379,7 +406,7 @@ def main():
                         default="jax_cpu",
                         help="Framework to use as baseline for ratio plots.")
     args = parser.parse_args()
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir) / args.results_subdir
     output_dir.mkdir(parents=True, exist_ok=True)
     labels = load_benchmark_labels(Path("bench_info"))
     frameworks = args.frameworks
