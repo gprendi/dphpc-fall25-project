@@ -13,7 +13,7 @@ import torch
 # paper data cpu backward median: 294ms    25ms
 
 def kernel(M, float_n, data):
-    @torch.compile
+    @torch.compile(mode='max-autotune')
     def loop_body(i_tensor, corr):
         # i = i_tensor.item() # this also triggers recompiling as scalar input
         corr[i_tensor, i_tensor] = 1.0

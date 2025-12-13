@@ -11,8 +11,8 @@ echo "Benchmarks passed: $@"
 srun python benchmark_backprop.py \
     --benchmarks $@ \
     --frameworks jax_cpu jax_gpu pytorch_cpu pytorch_gpu \
-    --preset M \
+    --preset S \
     --validate False \
-    --timeout 2000
+    --timeout 4000
 
 echo "Finished job at $(date)"
