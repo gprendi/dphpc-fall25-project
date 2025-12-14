@@ -12,7 +12,9 @@ srun python benchmark_backprop.py \
     --benchmarks $@ \
     --frameworks jax_cpu jax_gpu pytorch_cpu pytorch_gpu \
     --preset S \
-    --validate False \
+    --validate True \
     --timeout 4000
+
+mv npbench.db npbench_compile_S_both.db
 
 echo "Finished job at $(date)"

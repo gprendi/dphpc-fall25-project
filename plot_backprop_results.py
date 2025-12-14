@@ -2,6 +2,7 @@ import argparse
 import calendar
 import json
 import math
+import warnings
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -138,18 +139,40 @@ def load_benchmark_labels(bench_dir: Path) -> Dict[str, str]:
     return labels
 
 
-def fetch_results(preset: str, frameworks: List[str]) -> pd.DataFrame:
-    conn = util.create_connection("npbench.db")
-    data = pd.read_sql_query(
-        """
-        SELECT benchmark, domain, framework, mode, details, time
-        FROM results
-        WHERE preset = ?
-          AND mode IN ('forward', 'backward')
-        """,
-        conn,
-        params=(preset,),
-    )
+def fetch_results(preset: str, frameworks: List[str], db_path: str | Path) -> pd.DataFrame:
+    conn = util.create_connection(str(db_path))
+    try:
+        data = pd.read_sql_query(
+            """
+            SELECT benchmark, domain, framework, mode, details, time
+            FROM results
+            WHERE preset = ?
+              AND mode IN ('forward', 'backward')
+            """,
+            conn,
+            params=(preset,),
+        )
+    except Exception as exc:  # pragma: no cover
+        try:
+            tables = pd.read_sql_query(
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;",
+                conn,
+            )["name"].to_list()
+        except Exception:
+            tables = []
+
+        table_msg = (
+            "No tables found (DB may be empty/corrupt)."
+            if not tables
+            else f"Tables present: {', '.join(tables)}"
+        )
+
+        raise SystemExit(
+            "Failed to read benchmark results from the SQLite DB. "
+            "Expected a table named 'results'. "
+            f"{table_msg} "
+            f"(db={str(db_path)!r})\n\nOriginal error: {exc}"
+        ) from exc
     data = data[data["domain"] != ""]
     data = data[data["framework"].isin(frameworks)].reset_index(drop=True)
     return data
@@ -193,11 +216,45 @@ def _pivot_times(medians: pd.DataFrame) -> pd.DataFrame:
                                values="time_ms")
 
 
+def _warn_and_pad_missing_pivot_columns(
+    pivot: pd.DataFrame,
+    frameworks: List[str],
+    preset: str,
+) -> pd.DataFrame:
+    """Ensure pivot has all requested (framework, mode) columns.
+
+    Pandas will omit columns that have no data; later indexing like
+    pivot[(framework, mode)] would raise KeyError. We instead reindex to the
+    full expected column set and warn once per missing combo.
+    """
+
+    expected = pd.MultiIndex.from_product(
+        [frameworks, EXEC_MODES],
+        names=["framework", "mode"],
+    )
+
+    present = set(pivot.columns.to_list())
+    missing = [col for col in expected.to_list() if col not in present]
+    for framework, mode in missing:
+        warnings.warn(
+            (
+                f"Missing results for preset={preset!r}: "
+                f"framework={framework!r}, mode={mode!r}. "
+                "Plots will show blanks for this combination."
+            ),
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+    return pivot.reindex(columns=expected)
+
+
 def plot_speedup_heatmap(medians: pd.DataFrame, labels: Dict[str, str],
                          frameworks: List[str], baseline: str, preset: str,
                          output_dir: Path):
 
     pivot = _pivot_times(medians)
+    pivot = _warn_and_pad_missing_pivot_columns(pivot, frameworks, preset)
     benches = _ordered_benchmarks(medians, labels)
 
     # Compute ratio tables
@@ -388,12 +445,18 @@ def main():
                         default="ad_plots",
                         help="Directory for generated figures.")
     parser.add_argument(
+        "--db",
+        default="npbench.db",
+        help="SQLite database filename/path to read results from (default: npbench.db).",
+    )
+    parser.add_argument(
         "--results-subdir",
         "-r",
-        default=default_results_subdir_name(),
+        default=None,
         help=(
             "Subfolder name under --output-dir for all generated files. "
-            "Defaults to a timestamp like 12-Dec-2:27pm."
+            "Defaults to the DB filename (when --db is not npbench.db), "
+            "otherwise a timestamp like 12-Dec-2:27pm."
         ),
     )
     parser.add_argument("-f",
@@ -406,13 +469,30 @@ def main():
                         default="jax_cpu",
                         help="Framework to use as baseline for ratio plots.")
     args = parser.parse_args()
+
+    db_path = Path(args.db)
+    if not db_path.exists():
+        raise SystemExit(f"DB file not found: {str(db_path)!r}")
+    if db_path.is_file() and db_path.stat().st_size == 0:
+        raise SystemExit(
+            f"DB file is empty (0 bytes): {str(db_path)!r}. "
+            "Point --db at a populated results database."
+        )
+
+    if args.results_subdir is None:
+        db_name = Path(args.db).name
+        if db_name != "npbench.db":
+            args.results_subdir = db_name
+        else:
+            args.results_subdir = default_results_subdir_name()
+
     output_dir = Path(args.output_dir) / args.results_subdir
     output_dir.mkdir(parents=True, exist_ok=True)
     labels = load_benchmark_labels(Path("bench_info"))
     frameworks = args.frameworks
     if args.baseline not in frameworks:
         raise SystemExit("Baseline framework must be part of --frameworks.")
-    raw_results = fetch_results(args.preset, frameworks)
+    raw_results = fetch_results(args.preset, frameworks, args.db)
     if raw_results.empty:
         raise SystemExit("No benchmark results found for the requested preset.")
     medians, filtered = select_best_runs(raw_results)

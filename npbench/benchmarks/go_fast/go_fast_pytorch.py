@@ -3,19 +3,12 @@ import os
 import torch
 
 def go_fast(a: torch.Tensor) -> torch.Tensor:
-
-    @torch.compile(mode='max-autotune')
+    @torch.compile
     def body_fn(trace, diag):
         return trace + torch.tanh(diag)
 
     trace = torch.tensor([0.0], dtype=a.dtype, device=a.device)
-    mark_step_begin = getattr(getattr(torch, "compiler", None), "cudagraph_mark_step_begin", None)
     for i in range(a.size(0)):
-        # With torch.compile(mode="max-autotune") on CUDA, Inductor may use
-        # CUDAGraphs and reuse a static output buffer across invocations.
-        # If we carry the returned tensor into the next iteration, it can get
-        # overwritten by the next run unless we mark step boundaries.
-        mark_step_begin()
         trace = body_fn(trace, a[i, i])
     return a + trace
 
@@ -28,7 +21,7 @@ def go_fast(a: torch.Tensor) -> torch.Tensor:
 #     return trace
 
 
-# UNROLL_LIST = [int(os.environ.get("UNROLL", 100))]
+# UNROLL_LIST = [int(os.environ.get("UNROLL", 1))]
 
 
 # # @torch.compile(mode='reduce-overhead') # try reduce overhead
