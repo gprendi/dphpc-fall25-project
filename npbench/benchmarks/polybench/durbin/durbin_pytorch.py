@@ -13,7 +13,7 @@ def kernel(r):
         alpha, beta, y, r = loop_vars
         beta = beta.clone()
         beta *= 1.0 - alpha * alpha
-        mask = torch.arange(r.shape[0]) < k
+        mask = torch.arange(r.shape[0], device=r.device) < k
 
         products = torch.where(mask, y * torch.roll(torch.flip(r, [0]), [k], 0),0.0)
         dot_prod = torch.sum(products)
