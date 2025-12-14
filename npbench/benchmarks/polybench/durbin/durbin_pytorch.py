@@ -1,6 +1,8 @@
 import torch
 torch.autograd.set_detect_anomaly(True)
+import torch._functorch.config as config
 
+config.donated_buffer=False
 def kernel(r):
 
     y = torch.zeros_like(r)

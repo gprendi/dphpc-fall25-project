@@ -191,7 +191,9 @@ class Test(object):
                         raise
 
             # Capture visualization
-            capture_viz = self.visualize and self.frmwrk.info["simple_name"].startswith("pytorch") and exec_mode == "backward"
+            
+            capture_viz = self.visualize and self.frmwrk.info["simple_name"].startswith("pytorch")
+            print("capture_vizz ", capture_viz )
             if capture_viz:
                 viz_bdata = self.bench.get_data(viz_preset) if viz_preset else bdata
                 viz_context = {**viz_bdata, **self.frmwrk.imports()}
@@ -248,24 +250,31 @@ class Test(object):
             util.create_result(conn, util.sql_insert_into_results_table, result)
 
     def _generate_visualization(self, impl_name: str, exec_mode: str) -> None:
+        print("Generating visualization...")
         context = self._captured_exec_state
         if not context:
             return
-        loss_tensor = context.get("__npb_loss") or context.get("__npb_forward")
-        if isinstance(loss_tensor, (list, tuple)):
-            loss_tensor = sum(loss_tensor)
-        if loss_tensor is None or not hasattr(loss_tensor, "grad_fn"):
-            return
+        if exec_mode == 'forward':
+            loss_tensor = context.get("__npb_result")
+        else:
+            loss_tensor = context.get("__npb_loss") or context.get("__npb_forward")
+        
+        print("loss_tensor ", loss_tensor)
+        # if isinstance(loss_tensor, (list, tuple)):
+        #     loss_tensor = sum(loss_tensor)
+        # if loss_tensor is None or not hasattr(loss_tensor, "grad_fn"):
+        #     return
         autodiff = self.bench.info.get("autodiff", {})
-        grad_inputs = autodiff.get("grad_inputs", [])
+        grad_inputs = self.bench.info.get('input_args', [])
         params = {}
         prefix = self.frmwrk.info.get("prefix", "")
         for arg in grad_inputs:
             key = f"__npb_{prefix}_{arg}"
             tensor = context.get(key)
-            if tensor is not None and getattr(tensor, "requires_grad", False):
+            if tensor is not None:
                 params[arg] = tensor
-        dot = make_dot(loss_tensor, params=params or None)
+        print("params , ", params)
+        dot = make_dot(loss_tensor, params=params)
         out_dir = Path("visualizations")
         out_dir.mkdir(parents=True, exist_ok=True)
         stem = f"{self.bench.bname}_{self.frmwrk.info['simple_name']}_{impl_name}_{exec_mode}"
