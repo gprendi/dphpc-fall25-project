@@ -12,7 +12,7 @@
             "S": { "N": 100 },
             "M": { "N": 300 },
             "L": { "N": 900 },
-            "paper": { "N": 2000 }
+            "paper": { "N": 200 }
         },
         "init": {
             "func_name": "initialize",
