@@ -13,7 +13,7 @@ import torch
 # paper data cpu backward median: 294ms    25ms
 
 def kernel(M, float_n, data):
-    @torch.compile
+    # @torch.compile
     def loop_body(i_tensor, corr):
         corr[i_tensor, i_tensor] = 1.0
         return corr

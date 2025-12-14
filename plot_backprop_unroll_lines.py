@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
-from matplotlib import ticker
+from matplotlib import font_manager, ticker
+from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
 
@@ -23,6 +24,13 @@ def _discover_dbs(pattern: str) -> List[Path]:
 
 def _unroll_label(db_path: Path) -> str:
     stem = db_path.stem
+    if stem == "npbench-baseline":
+        # Treat baseline DBs as unroll factor 1.
+        return "1"
+    if stem == "npbench-noncompiled":
+        # Special DB: same workload, but noncompiled implementation.
+        # Keep non-numeric so it won't be treated as an x point.
+        return "noncompiled"
     prefix = "npbench-unroll-"
     if stem.startswith(prefix):
         return stem[len(prefix):]
@@ -46,6 +54,56 @@ def _as_float(label: str) -> Optional[float]:
     return None
 
 
+def _font_size_points(size: object, default: float = 10.0) -> float:
+    """Convert a Matplotlib font size (number or named size) to points."""
+    try:
+        return float(size)  # type: ignore[arg-type]
+    except Exception:
+        try:
+            return float(font_manager.FontProperties(size=size).get_size_in_points())
+        except Exception:
+            return float(default)
+
+
+def _apply_uniform_font(ax: plt.Axes, size_pt: float) -> None:
+    ax.tick_params(axis="both", which="both", labelsize=size_pt)
+    ax.xaxis.label.set_size(size_pt)
+    ax.yaxis.label.set_size(size_pt)
+    ax.title.set_size(size_pt)
+    leg = ax.get_legend()
+    if leg is not None:
+        for txt in leg.get_texts():
+            txt.set_fontsize(size_pt)
+        if leg.get_title() is not None:
+            leg.get_title().set_fontsize(size_pt)
+
+
+def _set_speedup_power2_yticks(ax: plt.Axes, ys: np.ndarray) -> None:
+    """For speedup plots on a log y-axis, label powers of 2 explicitly."""
+    finite = ys[np.isfinite(ys) & (ys > 0)]
+    if finite.size == 0:
+        return
+    lo = float(np.nanmin(finite))
+    hi = float(np.nanmax(finite))
+    if not (lo > 0 and hi > 0):
+        return
+    exp_lo = int(np.floor(np.log2(lo)))
+    exp_hi = int(np.ceil(np.log2(hi)))
+    # Cap to avoid pathological tick explosions.
+    exp_hi = min(exp_hi, exp_lo + 60)
+
+    # Match the x-axis style: label as 2^k (and keep it readable by stepping by 2).
+    start = exp_lo if (exp_lo % 2 == 0) else (exp_lo - 1)
+    end = exp_hi if (exp_hi % 2 == 0) else (exp_hi + 1)
+    ticks = [2**e for e in range(start, end + 1, 2)]
+
+    ax.set_yscale("log", base=2)
+    ax.set_yticks(ticks)
+    ax.set_yticklabels([rf"$2^{{{e}}}$" for e in range(start, end + 1, 2)])
+    ax.yaxis.set_minor_locator(ticker.LogLocator(base=2, subs="auto"))
+    ax.yaxis.set_minor_formatter(ticker.NullFormatter())
+
+
 def _infer_preset_from_name(name: str) -> Optional[str]:
     """Infer NPBench preset from a folder label like 'unroll-go_fast-M'."""
     parts = re.split(r"[-_]+", name)
@@ -55,6 +113,41 @@ def _infer_preset_from_name(name: str) -> Optional[str]:
     if last in {"S", "M", "L", "paper"}:
         return last
     return None
+
+
+def _pretty_framework_name(framework: str) -> str:
+    """Convert a framework id like 'pytorch_gpu' to 'PyTorch GPU'."""
+    if not framework:
+        return framework
+    parts = framework.split("_")
+    head_map = {
+        "pytorch": "PyTorch",
+        "jax": "JAX",
+        "numpy": "NumPy",
+        "numba": "Numba",
+        "cupy": "CuPy",
+        "pythran": "Pythran",
+        "legate": "Legate",
+        "dpnp": "DPNP",
+        "dace": "DaCe",
+        "appy": "Appy",
+    }
+    pretty: List[str] = []
+    if parts:
+        pretty.append(head_map.get(parts[0], parts[0].title()))
+        for p in parts[1:]:
+            if p.lower() == "cpu":
+                pretty.append("CPU")
+            elif p.lower() == "gpu":
+                pretty.append("GPU")
+            else:
+                pretty.append(p.replace("-", " ").title())
+    return " ".join(pretty) if pretty else framework
+
+
+def _extract_preset_from_series_label(series_label: str) -> Optional[str]:
+    m = re.search(r"\((S|M|L|paper)\)\s*$", series_label)
+    return m.group(1) if m else None
 
 
 def _load_benchmark_aliases(bench_dir: Path) -> Dict[str, str]:
@@ -124,16 +217,27 @@ def _load_medians_for_unroll_dbs(
     dbs: List[Path],
     preset: str,
     framework: str,
+    extra_frameworks: Optional[List[str]] = None,
 ) -> Dict[str, pd.DataFrame]:
     per_db_medians: Dict[str, pd.DataFrame] = {}
+    frameworks = [framework] + list(extra_frameworks or [])
     for db in dbs:
         label = _unroll_label(db)
         try:
-            raw = fetch_results_from_db(db, preset, [framework])
+            raw = fetch_results_from_db(db, preset, frameworks)
         except Exception as exc:
             warnings.warn(f"Skipping DB {db}: {exc}", RuntimeWarning, stacklevel=2)
             continue
         if raw.empty:
+            warnings.warn(
+                f"No rows for frameworks={frameworks!r}, preset={preset!r} in {db}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            continue
+
+        # Require the primary framework to be present for this DB to be useful.
+        if raw[raw["framework"] == framework].empty:
             warnings.warn(
                 f"No rows for framework={framework!r}, preset={preset!r} in {db}",
                 RuntimeWarning,
@@ -141,7 +245,29 @@ def _load_medians_for_unroll_dbs(
             )
             continue
 
-        medians, _filtered = pbr.select_best_runs(raw)
+        # Primary framework: keep existing behavior (choose best details variant).
+        primary_raw = raw[raw["framework"] == framework].reset_index(drop=True)
+        medians_primary, _filtered = pbr.select_best_runs(primary_raw)
+
+        # Extra frameworks: compute a straight median across all details.
+        medians_extra_frames: List[pd.DataFrame] = []
+        for extra in list(extra_frameworks or []):
+            extra_raw = raw[raw["framework"] == extra]
+            if extra_raw.empty:
+                continue
+            med = (
+                extra_raw.groupby(["benchmark", "framework", "mode"], dropna=False)
+                .agg(time=("time", "median"))
+                .reset_index()
+            )
+            med["time_ms"] = med["time"] * 1000.0
+            medians_extra_frames.append(med)
+
+        if medians_extra_frames:
+            medians = pd.concat([medians_primary] + medians_extra_frames, ignore_index=True)
+        else:
+            medians = medians_primary
+
         per_db_medians[label] = medians
     return per_db_medians
 
@@ -234,12 +360,12 @@ def plot_unroll_lines(
 
     ax.set_title(
         (
-            f"{framework} {mode} median runtime vs unroll (preset={preset})"
+            f"{_pretty_framework_name(framework)} {mode} median runtime vs unroll (preset={preset})"
             if not relative_to_first
             else (
-                f"{framework} {mode} speedup vs unroll (preset={preset})"
+                f"{_pretty_framework_name(framework)} {mode} speedup vs unroll (preset={preset})"
                 if speedup
-                else f"{framework} {mode} runtime scale vs unroll (preset={preset})"
+                else f"{_pretty_framework_name(framework)} {mode} runtime scale vs unroll (preset={preset})"
             )
         )
     )
@@ -250,23 +376,60 @@ def plot_unroll_lines(
         else ("Speedup (× vs first unroll)" if speedup else "Runtime scale (× first unroll)")
     )
 
+    # Style: make x tick labels 2× larger; match y-axis label fontsize.
+    base_tick = _font_size_points(plt.rcParams.get("xtick.labelsize", 10), default=10.0)
+    big = base_tick * 2.0
+    ax.tick_params(axis="x", labelsize=big)
+    ax.yaxis.label.set_size(big)
+
     ax.set_xscale("log", base=2)
     ax.set_xticks(unroll_x)
     ax.set_xticklabels([str(int(x)) if float(x).is_integer() else str(x) for x in unroll_x])
     ax.xaxis.set_minor_locator(ticker.LogLocator(base=2, subs="auto"))
     ax.xaxis.set_minor_formatter(ticker.NullFormatter())
 
+    # Ensure the axis starts at 2^0 (unroll=1), even if the first data point is larger.
+    try:
+        ax.set_xlim(left=1)
+    except Exception:
+        pass
+
     if use_logscale:
-        ax.set_yscale("log")
+        # For speedup plots, use base-2 log scaling to match 2^k tick labels.
+        if relative_to_first and speedup:
+            ax.set_yscale("log", base=2)
+        else:
+            ax.set_yscale("log")
 
     ax.yaxis.set_major_locator(ticker.MaxNLocator(nbins=10))
-    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(2))
+    if use_logscale:
+        # Minor ticks depend on the y-scale base.
+        base = 2 if (relative_to_first and speedup) else 10
+        ax.yaxis.set_minor_locator(ticker.LogLocator(base=base, subs="auto"))
+        ax.yaxis.set_minor_formatter(ticker.NullFormatter())
+    else:
+        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(2))
     ax.grid(axis="y", which="major", linestyle="--", alpha=0.4)
     ax.grid(axis="y", which="minor", linestyle=":", alpha=0.25)
     ax.legend(title="benchmark", ncol=2)
 
+    # Font sizing: unify all text and reduce by 30% vs last iteration.
+    base_tick = _font_size_points(plt.rcParams.get("xtick.labelsize", 10), default=10.0)
+    uniform = base_tick * 1.4  # previously 2.0×; now 30% smaller
+    _apply_uniform_font(ax, uniform)
+
+    # Speedup tick labels: label powers of 2 explicitly on log scale.
+    if use_logscale and relative_to_first and speedup:
+        all_y = []
+        for line in ax.get_lines():
+            ydata = line.get_ydata()
+            if ydata is not None:
+                all_y.append(np.asarray(ydata, dtype=float))
+        if all_y:
+            _set_speedup_power2_yticks(ax, np.concatenate(all_y))
+
     fig.tight_layout()
-    fig.savefig(output_path, dpi=300)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -279,6 +442,7 @@ def plot_unroll_lines_series(
     use_logscale: bool,
     relative_to_first: bool,
     speedup: bool,
+    show_noncompiled: bool = True,
     only_benchmarks: Optional[List[str]] = None,
     bench: Optional[str] = None,
 ) -> None:
@@ -310,8 +474,17 @@ def plot_unroll_lines_series(
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
+    preset_colors = {
+        "M": "tab:blue",
+        "S": "tab:orange",
+        "L": "tab:green",
+        "paper": "tab:purple",
+    }
+
     for series_label in sorted(series_to_per_db_medians.keys()):
         per_db = series_to_per_db_medians[series_label]
+        preset = _extract_preset_from_series_label(series_label)
+        series_color = preset_colors.get(preset or "")
         unroll_labels = sorted(per_db.keys(), key=_sort_key)
 
         xs: List[float] = []
@@ -326,8 +499,18 @@ def plot_unroll_lines_series(
             xs.append(x)
             ys.append(float(val.iloc[0]) if not val.empty else np.nan)
 
+        # Grab baseline (unroll=1) runtime for the primary framework if present.
+        baseline_time_ms: Optional[float] = None
+        if "1" in per_db:
+            base_med = per_db["1"]
+            base_subset = base_med[(base_med["framework"] == framework) & (base_med["mode"] == mode)]
+            base_val = base_subset[base_subset["benchmark"] == bench]["time_ms"]
+            if not base_val.empty:
+                baseline_time_ms = float(base_val.iloc[0])
+
         if relative_to_first and ys:
-            baseline = ys[0]
+            # Normalize to unroll=1 when available; otherwise fall back to the first x point.
+            baseline = baseline_time_ms if baseline_time_ms is not None else ys[0]
             if baseline and not np.isnan(baseline) and baseline > 0:
                 arr = np.asarray(ys, dtype=float)
                 if speedup:
@@ -336,7 +519,7 @@ def plot_unroll_lines_series(
                     ys = (arr / float(baseline)).tolist()
             else:
                 warnings.warn(
-                    f"Cannot normalize series {series_label!r}: missing/invalid baseline at first unroll.",
+                    f"Cannot normalize series {series_label!r}: missing/invalid baseline at unroll=1.",
                     RuntimeWarning,
                     stacklevel=2,
                 )
@@ -348,16 +531,68 @@ def plot_unroll_lines_series(
                 stacklevel=2,
             )
             continue
-        ax.plot(xs, ys, marker="o", linewidth=1.8, markersize=4, label=series_label)
+
+        primary_line = ax.plot(
+            xs,
+            ys,
+            marker="o",
+            linewidth=1.8,
+            markersize=4,
+            color=series_color,
+            label="_nolegend_",
+        )[0]
+
+        # If the baseline DB also contains a jax_gpu run, plot it as a horizontal reference
+        # line (same color as this series), expressed in the same units as the primary line.
+        if "1" in per_db and baseline_time_ms is not None and baseline_time_ms > 0:
+            base_med = per_db["1"]
+            jax_subset = base_med[(base_med["framework"] == "jax_gpu") & (base_med["mode"] == mode)]
+            jax_val = jax_subset[jax_subset["benchmark"] == bench]["time_ms"]
+            if not jax_val.empty:
+                jax_time_ms = float(jax_val.iloc[0])
+                if relative_to_first:
+                    jax_y = (baseline_time_ms / jax_time_ms) if speedup else (jax_time_ms / baseline_time_ms)
+                else:
+                    jax_y = jax_time_ms
+
+                ax.plot(
+                    xs,
+                    [jax_y] * len(xs),
+                    linestyle="--",
+                    linewidth=1.8,
+                    color=primary_line.get_color(),
+                    label="_nolegend_",
+                )
+
+            # Also plot noncompiled (same framework) as a horizontal reference line.
+            # Value is relative to the compiled unroll=1 baseline when normalizing.
+            if show_noncompiled and "noncompiled" in per_db:
+                nc_med = per_db["noncompiled"]
+                nc_subset = nc_med[(nc_med["framework"] == framework) & (nc_med["mode"] == mode)]
+                nc_val = nc_subset[nc_subset["benchmark"] == bench]["time_ms"]
+                if not nc_val.empty:
+                    nc_time_ms = float(nc_val.iloc[0])
+                    if relative_to_first:
+                        nc_y = (baseline_time_ms / nc_time_ms) if speedup else (nc_time_ms / baseline_time_ms)
+                    else:
+                        nc_y = nc_time_ms
+                    ax.plot(
+                        xs,
+                        [nc_y] * len(xs),
+                        linestyle=":",
+                        linewidth=1.8,
+                        color=primary_line.get_color(),
+                        label="_nolegend_",
+                    )
 
     ax.set_title(
         (
-            f"{framework} {mode} median runtime vs unroll ({labels.get(bench, bench)})"
+            f"{_pretty_framework_name(framework)} {mode} median runtime vs unroll ({labels.get(bench, bench)})"
             if not relative_to_first
             else (
-                f"{framework} {mode} speedup vs unroll ({labels.get(bench, bench)})"
+                f"{_pretty_framework_name(framework)} {mode} speedup vs unroll ({labels.get(bench, bench)})"
                 if speedup
-                else f"{framework} {mode} runtime scale vs unroll ({labels.get(bench, bench)})"
+                else f"{_pretty_framework_name(framework)} {mode} runtime scale vs unroll ({labels.get(bench, bench)})"
             )
         )
     )
@@ -367,19 +602,108 @@ def plot_unroll_lines_series(
         if not relative_to_first
         else ("Speedup (× vs first unroll)" if speedup else "Runtime scale (× first unroll)")
     )
+
+    # Style: make x tick labels 2× larger; match y-axis label fontsize.
+    base_tick = _font_size_points(plt.rcParams.get("xtick.labelsize", 10), default=10.0)
+    big = base_tick * 2.0
+    ax.tick_params(axis="x", labelsize=big)
+    ax.yaxis.label.set_size(big)
     ax.set_xscale("log", base=2)
     ax.xaxis.set_minor_locator(ticker.LogLocator(base=2, subs="auto"))
     ax.xaxis.set_minor_formatter(ticker.NullFormatter())
 
+    # Ensure the axis starts at 2^0 (unroll=1), and add a small right padding so
+    # the rightmost markers/lines don't get clipped.
+    try:
+        max_x = 1.0
+        for line in ax.get_lines():
+            xdata = np.asarray(line.get_xdata(), dtype=float)
+            xdata = xdata[np.isfinite(xdata)]
+            if xdata.size:
+                max_x = max(max_x, float(np.max(xdata)))
+        ax.set_xlim(left=1, right=max_x * 1.05)
+    except Exception:
+        pass
+
     if use_logscale:
-        ax.set_yscale("log")
+        # For speedup plots, use base-2 log scaling to match 2^k tick labels.
+        if relative_to_first and speedup:
+            ax.set_yscale("log", base=2)
+        else:
+            ax.set_yscale("log")
     ax.yaxis.set_major_locator(ticker.MaxNLocator(nbins=10))
-    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(2))
+    if use_logscale:
+        base = 2 if (relative_to_first and speedup) else 10
+        ax.yaxis.set_minor_locator(ticker.LogLocator(base=base, subs="auto"))
+        ax.yaxis.set_minor_formatter(ticker.NullFormatter())
+    else:
+        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(2))
     ax.grid(axis="y", which="major", linestyle="--", alpha=0.4)
     ax.grid(axis="y", which="minor", linestyle=":", alpha=0.25)
-    ax.legend(title="series")
+
+    # Simplified legend:
+    # - linestyle encodes framework
+    # - color encodes dataset/preset
+    style_handles = [
+        Line2D([0], [0], color="black", lw=2, linestyle="-", label=_pretty_framework_name(framework)),
+        Line2D([0], [0], color="black", lw=2, linestyle="--", label=_pretty_framework_name("jax_gpu")),
+    ]
+    has_noncompiled = show_noncompiled and any(
+        "noncompiled" in per_db for per_db in series_to_per_db_medians.values()
+    )
+    if has_noncompiled:
+        style_handles.append(
+            Line2D(
+                [0],
+                [0],
+                color="black",
+                lw=2,
+                linestyle=":",
+                label=f"Noncompiled {_pretty_framework_name(framework)}",
+            )
+        )
+
+    preset_colors = {
+        "M": "tab:blue",
+        "S": "tab:orange",
+        "L": "tab:green",
+        "paper": "tab:purple",
+    }
+    present_presets = [
+        p
+        for p in ["M", "S", "L", "paper"]
+        if any(_extract_preset_from_series_label(k) == p for k in series_to_per_db_medians.keys())
+    ]
+    color_handles = [
+        Line2D([0], [0], color=preset_colors[p], lw=2, linestyle="-", label=f"{p} dataset")
+        for p in present_presets
+    ]
+
+    # Put legend outside so it doesn't hide the x=1 baseline points.
+    ax.legend(
+        handles=style_handles + color_handles,
+        title="Series",
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1.0),
+        borderaxespad=0.0,
+    )
+
+    # Font sizing: unify all text and reduce by 30% vs last iteration.
+    base_tick = _font_size_points(plt.rcParams.get("xtick.labelsize", 10), default=10.0)
+    uniform = base_tick * 1.4  # previously 2.0×; now 30% smaller
+    _apply_uniform_font(ax, uniform)
+
+    # Speedup tick labels: label powers of 2 explicitly on log scale.
+    if use_logscale and relative_to_first and speedup:
+        all_y = []
+        for line in ax.get_lines():
+            ydata = line.get_ydata()
+            if ydata is not None:
+                all_y.append(np.asarray(ydata, dtype=float))
+        if all_y:
+            _set_speedup_power2_yticks(ax, np.concatenate(all_y))
     fig.tight_layout()
-    fig.savefig(output_path, dpi=300)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -443,6 +767,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--logy",
         action="store_true",
+        default=True,
         help="Use log scale for the y-axis.",
     )
     parser.add_argument(
@@ -456,6 +781,12 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "When normalizing (default), plot runtime scale (runtime / first) instead of speedup (first / runtime)."
         ),
+    )
+    parser.add_argument(
+        "--show-noncompiled",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Show noncompiled horizontal reference line (default: true).",
     )
     parser.add_argument(
         "-o",
@@ -506,7 +837,15 @@ def main() -> int:
         for d, preset_override in zip(db_dirs, series_presets):
             inferred = _infer_preset_from_name(d.name)
             preset = preset_override or inferred or args.preset
-            dbs = sorted(d.glob("npbench-unroll-*.db"))
+            dbs: List[Path] = []
+            baseline_db = d / "npbench-baseline.db"
+            if baseline_db.is_file():
+                dbs.append(baseline_db)
+            if args.show_noncompiled:
+                noncompiled_db = d / "npbench-noncompiled.db"
+                if noncompiled_db.is_file():
+                    dbs.append(noncompiled_db)
+            dbs.extend(sorted(d.glob("npbench-unroll-*.db")))
             if not dbs:
                 warnings.warn(
                     f"No DBs found in {d} matching npbench-unroll-*.db",
@@ -514,7 +853,12 @@ def main() -> int:
                     stacklevel=1,
                 )
                 continue
-            per_db_medians = _load_medians_for_unroll_dbs(dbs, preset, args.framework)
+            per_db_medians = _load_medians_for_unroll_dbs(
+                dbs,
+                preset,
+                args.framework,
+                extra_frameworks=["jax_gpu"],
+            )
             if per_db_medians:
                 series_to_per_db_medians[f"{d.name} ({preset})"] = per_db_medians
 
@@ -537,13 +881,22 @@ def main() -> int:
             use_logscale=args.logy,
             relative_to_first=(not args.absolute),
             speedup=(not args.runtime_scale),
+            show_noncompiled=args.show_noncompiled,
             only_benchmarks=resolved_benchmarks,
         )
     else:
         dbs = _discover_dbs(args.db_glob)
+        baseline_db = Path("npbench-baseline.db")
+        if baseline_db.is_file():
+            dbs = [baseline_db] + dbs
         if not dbs:
             raise SystemExit(f"No DBs matched --db-glob={args.db_glob!r}")
-        per_db_medians = _load_medians_for_unroll_dbs(dbs, args.preset, args.framework)
+        per_db_medians = _load_medians_for_unroll_dbs(
+            dbs,
+            args.preset,
+            args.framework,
+            extra_frameworks=["jax_gpu"],
+        )
         if not per_db_medians:
             raise SystemExit("No usable DBs produced data; nothing to plot.")
 
