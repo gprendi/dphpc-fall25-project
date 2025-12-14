@@ -1,37 +1,38 @@
 import torch
 
+def _chol_panel(B: torch.Tensor) -> torch.Tensor:
+    m = B.shape[0]
+    rows = []
+    for i in range(m):
+        row = torch.zeros_like(B[i])
+        for j in range(i):
+            s = torch.dot(row[:j].clone(), rows[j][:j])
+            row[j] = (B[i, j] - s) / rows[j][j]
+        s = torch.dot(row[:i].clone(), row[:i].clone())
+        row[i] = torch.sqrt(B[i, i] - s)
+        rows.append(row)
+    return torch.stack(rows, 0)
 
-@torch.compile
-def kernel(A):
+def kernel(A: torch.Tensor) -> torch.Tensor:
+    n = A.shape[0]
+    R = A.clone()
+    L = torch.zeros_like(A)
 
-    A = A.clone()
-    A[0, 0] = torch.sqrt(A[0, 0])
+    b = 4 # tune: 32/64 are usually good on CPU for n=100..500
 
-    def row_update(i, A):
+    for k in range(0, n, b):
+        bk = min(b, n - k)
 
-        def col_update(j, A):
-            mask = torch.arange(A.shape[1], device=A.device) < j  # bool mask
+        Akk = R[k:k+bk, k:k+bk].clone()
+        Lkk = _chol_panel(Akk)
+        L[k:k+bk, k:k+bk] = Lkk
 
-            A_i_slice = torch.where(mask, A[i, :], torch.zeros_like(A[i, :]))
-            A_j_slice = torch.where(mask, A[j, :], torch.zeros_like(A[j, :]))
+        k2 = k + bk
+        if k2 < n:
+            Ak1 = R[k2:n, k:k+bk].clone()
+            L21 = torch.linalg.solve_triangular(Lkk, Ak1.T, upper=False).T
+            L[k2:n, k:k+bk] = L21
 
-            dot_product = torch.dot(A_i_slice, A_j_slice)
-            A[i, j] = (A[i, j] - dot_product) / A[j, j]
-            return A
-        
-        for j in range(0, i):
-            A = col_update(j, A)
+            R[k2:n, k2:n] = R[k2:n, k2:n] - L21 @ L21.T
 
-        A_i_slice = torch.where(
-            torch.arange(A.shape[1], device=A.device) < i,
-            A[i, :],
-            torch.zeros_like(A[i, :]),
-        )
-        dot_product = torch.dot(A_i_slice, A_i_slice)
-        A[i, i] = torch.sqrt(A[i, i] - dot_product)
-        return A
-
-    for i in range(1, A.shape[0]):
-        A = row_update(i, A)
-
-    return A
+    return torch.triu(A, 1) + torch.tril(L)

@@ -10,3 +10,4 @@ def kernel(A):
             A[i, j] /= A[j, j]
         A[i, i] -= np.dot(A[i, :i], A[i, :i])
         A[i, i] = np.sqrt(A[i, i])
+    return A
