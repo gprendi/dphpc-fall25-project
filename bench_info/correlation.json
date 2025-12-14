@@ -12,7 +12,8 @@
             "S": { "M": 500, "N": 600 },
             "M": { "M": 1400, "N": 1800 },
             "L": { "M": 3200, "N": 4000 },
-            "paper": { "M": 1200, "N": 1400 }
+            "paper": { "M": 1200, "N": 1400 },
+            "visualize": { "M": 10, "N": 10 }
         },
         "init": {
             "func_name": "initialize",
@@ -22,6 +23,10 @@
         "input_args": ["M", "float_n", "data"],
         "array_args": ["data"],
         "output_args": ["corr"],
+        "visualization": {
+            
+            "N": 10
+        },
         "autodiff": {
         "loss": {
             "type": "sum",

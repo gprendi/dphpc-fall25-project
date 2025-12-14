@@ -12,7 +12,8 @@
       "S": { "N": 1000 },
       "M": { "N": 6000 },
       "L": { "N": 20000 },
-      "paper": { "N": 16000 }
+      "paper": { "N": 16000 },
+      "visualize": { "N": 3 }
     },
     "init": {
       "func_name": "initialize",
