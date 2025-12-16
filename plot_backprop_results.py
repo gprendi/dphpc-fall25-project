@@ -163,6 +163,8 @@ def fetch_results(presets: List[str], frameworks: List[str]) -> pd.DataFrame:
         ) from exc
     data = data[data["domain"] != ""]
     data = data[data["framework"].isin(frameworks)].reset_index(drop=True)
+    # Drop auxiliary JAX lib implementations; keep only primary runs
+    data = data[~data["details"].str.contains("lib-implementation", na=False)]
     return data
 
 
