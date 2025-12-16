@@ -1,0 +1,33 @@
+{
+    "benchmark": {
+        "name": "Naive Loop",
+        "short_name": "naive_loop",
+        "relative_path": "polybench/naive_loop",
+        "module_name": "naive_loop",
+        "func_name": "kernel",
+        "kind": "microbench",
+        "domain": "Learning",
+        "dwarf": "dense_linear_algebra",
+        "parameters": {
+            "S": { "M": 1000},
+            "M": { "M": 10000},
+            "L": { "M": 100000},
+            "paper": { "M": 1200}
+        },
+        "init": {
+            "func_name": "initialize",
+            "input_args": ["M"],
+            "output_args": ["data"]
+        },
+        "input_args": ["M", "data"],
+        "array_args": ["data"],
+        "output_args": ["result"],
+        "autodiff": {
+        "loss": {
+            "type": "sum",
+            "target": "result"
+        },
+        "grad_inputs": ["data"]
+        }
+    }
+}
