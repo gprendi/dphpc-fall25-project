@@ -208,6 +208,11 @@ def fetch_results_from_db(db_file: Path, preset: str, frameworks: List[str]) -> 
         conn,
         params=(preset,),
     )
+    # Exclude runs that use the library implementation (forward or backward).
+    # Apply at load time so it affects all frameworks (including reference ones like jax_gpu).
+    if "details" in data.columns:
+        details = data["details"].astype("string")
+        data = data[~details.str.contains("lib-implementation", na=False)]
     data = data[data["domain"] != ""]
     data = data[data["framework"].isin(frameworks)].reset_index(drop=True)
     return data

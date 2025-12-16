@@ -52,20 +52,20 @@ echo "Benchmarks passed: $@"
 echo "Preset: $PRESET"
 
 BENCH_TAG="${*// /_}"
-FOLDER="unroll-${BENCH_TAG}-${PRESET}"
+FOLDER="dbs/unroll-uncompiled/unroll-${BENCH_TAG}-${PRESET}"
 mkdir -p "$FOLDER"
 
 rm -f npbench.db
 UNROLL=1 srun --ntasks=1 python benchmark_backprop.py -b "$@" -f jax_gpu pytorch_gpu --preset "$PRESET"
 mv -f npbench.db "${FOLDER}/npbench-baseline.db"
 
-# GRID="16 24 32 48 64 96 128 192 256 384 512 768 1024"
+GRID="16 24 32 48 64 96 128 192 256 384 512 768 1024"
 
-# for unroll in $GRID
-# do
-#     rm -f npbench.db
-#     echo "Unroll factor: $unroll"
-#     UNROLL=$unroll TORCHINDUCTOR_FX_GRAPH_CACHE=1 \
-#     srun --ntasks=1 python benchmark_backprop.py -b "$@" -f pytorch_gpu --preset $PRESET
-#     mv -f npbench.db "${FOLDER}/npbench-unroll-$unroll.db"
-# done
+for unroll in $GRID
+do
+    rm -f npbench.db
+    echo "Unroll factor: $unroll"
+    UNROLL=$unroll TORCHINDUCTOR_FX_GRAPH_CACHE=1 \
+    srun --ntasks=1 python benchmark_backprop.py -b "$@" -f pytorch_gpu --preset $PRESET
+    mv -f npbench.db "${FOLDER}/npbench-unroll-$unroll.db"
+done

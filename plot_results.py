@@ -103,6 +103,10 @@ data = data[data["domain"] != ""]
 data = data[data['validated'] == True]
 data = data.drop(['validated'], axis=1).reset_index(drop=True)
 
+# Exclude lib-implementation detail variants from all DB-backed plots.
+if "details" in data.columns:
+    data = data[~data["details"].str.contains("lib-implementation", na=False)].reset_index(drop=True)
+
 # Filter by preset
 data = data[data['preset'] == args['preset']]
 data = data.drop(['preset'], axis=1).reset_index(drop=True)

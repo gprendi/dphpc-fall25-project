@@ -174,12 +174,20 @@ def fetch_results(preset: str, frameworks: List[str], db_path: str | Path) -> pd
             f"(db={str(db_path)!r})\n\nOriginal error: {exc}"
         ) from exc
     data = data[data["domain"] != ""]
+
+    # Exclude implementation-internal detail variants from any DB (incl. baselines).
+    if "details" in data.columns:
+        data = data[~data["details"].str.contains("lib-implementation", na=False)].reset_index(drop=True)
+
     data = data[data["framework"].isin(frameworks)].reset_index(drop=True)
     return data
 
 
 def select_best_runs(results: pd.DataFrame
                      ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    # Defensive: ensure any caller-provided frame also respects the exclusion.
+    if "details" in results.columns:
+        results = results[~results["details"].str.contains("lib-implementation", na=False)].reset_index(drop=True)
     grouped = (results.groupby(
         ["benchmark", "framework", "mode", "details"], dropna=False).agg(
             time=("time", "median")).reset_index())
