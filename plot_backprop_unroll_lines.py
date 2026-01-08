@@ -450,6 +450,7 @@ def plot_unroll_lines_series(
     show_noncompiled: bool = True,
     only_benchmarks: Optional[List[str]] = None,
     bench: Optional[str] = None,
+    series_to_kind: Optional[Dict[str, str]] = None,
 ) -> None:
     """Plot median runtime vs unroll with one line per series (directory).
 
@@ -479,6 +480,15 @@ def plot_unroll_lines_series(
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
+    # Line style mapping:
+    # - color encodes dataset/preset (S/M/L/paper)
+    # - linestyle encodes compiled vs uncompiled
+    compiled_style = "-"
+    uncompiled_style = "--"
+    # Reference styles (avoid clashing with compiled/uncompiled linestyles).
+    jax_ref_style = ":"
+    noncompiled_ref_style = "-."
+
     preset_colors = {
         "M": "tab:blue",
         "S": "tab:orange",
@@ -491,6 +501,21 @@ def plot_unroll_lines_series(
         preset = _extract_preset_from_series_label(series_label)
         series_color = preset_colors.get(preset or "")
         unroll_labels = sorted(per_db.keys(), key=_sort_key)
+
+        kind = None
+        if series_to_kind is not None:
+            kind = series_to_kind.get(series_label)
+        if kind is None:
+            lowered = series_label.lower()
+            is_uncompiled = (
+                "uncompiled" in lowered or "no-compile" in lowered or "nocompile" in lowered
+            )
+            is_compiled = ("compiled" in lowered or "compile" in lowered) and not is_uncompiled
+            if is_uncompiled:
+                kind = "uncompiled"
+            elif is_compiled:
+                kind = "compiled"
+        primary_linestyle = uncompiled_style if kind == "uncompiled" else compiled_style
 
         xs: List[float] = []
         ys: List[float] = []
@@ -544,6 +569,7 @@ def plot_unroll_lines_series(
             linewidth=1.8,
             markersize=4,
             color=series_color,
+            linestyle=primary_linestyle,
             label="_nolegend_",
         )[0]
 
@@ -563,7 +589,7 @@ def plot_unroll_lines_series(
                 ax.plot(
                     xs,
                     [jax_y] * len(xs),
-                    linestyle="--",
+                    linestyle=jax_ref_style,
                     linewidth=1.8,
                     color=primary_line.get_color(),
                     label="_nolegend_",
@@ -584,7 +610,7 @@ def plot_unroll_lines_series(
                     ax.plot(
                         xs,
                         [nc_y] * len(xs),
-                        linestyle=":",
+                        linestyle=noncompiled_ref_style,
                         linewidth=1.8,
                         color=primary_line.get_color(),
                         label="_nolegend_",
@@ -647,12 +673,66 @@ def plot_unroll_lines_series(
     ax.grid(axis="y", which="minor", linestyle=":", alpha=0.25)
 
     # Simplified legend:
-    # - linestyle encodes framework
+    # - linestyle encodes compiled vs uncompiled
     # - color encodes dataset/preset
-    style_handles = [
-        Line2D([0], [0], color="black", lw=2, linestyle="-", label=_pretty_framework_name(framework)),
-        Line2D([0], [0], color="black", lw=2, linestyle="--", label=_pretty_framework_name("jax_gpu")),
-    ]
+    kinds_present: set[str] = set()
+    if series_to_kind is not None:
+        kinds_present |= {k for k in series_to_kind.values() if k}
+    else:
+        for lbl in series_to_per_db_medians.keys():
+            low = lbl.lower()
+            is_uncompiled = ("uncompiled" in low or "no-compile" in low or "nocompile" in low)
+            is_compiled = ("compiled" in low or "compile" in low) and not is_uncompiled
+            if is_uncompiled:
+                kinds_present.add("uncompiled")
+            if is_compiled:
+                kinds_present.add("compiled")
+
+    style_handles: List[Line2D] = []
+    if ("compiled" in kinds_present) or (not kinds_present):
+        style_handles.append(
+            Line2D(
+                [0],
+                [0],
+                color="black",
+                lw=2,
+                linestyle=compiled_style,
+                label=f"Compiled {_pretty_framework_name(framework)}",
+            )
+        )
+    if "uncompiled" in kinds_present:
+        style_handles.append(
+            Line2D(
+                [0],
+                [0],
+                color="black",
+                lw=2,
+                linestyle=uncompiled_style,
+                label=f"Uncompiled {_pretty_framework_name(framework)}",
+            )
+        )
+    if (not style_handles) and ("uncompiled" in kinds_present):
+        # Only uncompiled series were provided.
+        style_handles.append(
+            Line2D(
+                [0],
+                [0],
+                color="black",
+                lw=2,
+                linestyle=uncompiled_style,
+                label=f"Uncompiled {_pretty_framework_name(framework)}",
+            )
+        )
+    style_handles.append(
+        Line2D(
+            [0],
+            [0],
+            color="black",
+            lw=2,
+            linestyle=jax_ref_style,
+            label=_pretty_framework_name("jax_gpu") + " (ref)",
+        )
+    )
     has_noncompiled = show_noncompiled and any(
         "noncompiled" in per_db for per_db in series_to_per_db_medians.values()
     )
@@ -663,7 +743,7 @@ def plot_unroll_lines_series(
                 [0],
                 color="black",
                 lw=2,
-                linestyle=":",
+                linestyle=noncompiled_ref_style,
                 label=f"Noncompiled {_pretty_framework_name(framework)}",
             )
         )
@@ -731,6 +811,24 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "One or more directories, each containing npbench-unroll-*.db. "
             "When provided, plots one line per directory (series)."
+        ),
+    )
+    parser.add_argument(
+        "--compiled-db-dirs",
+        nargs="+",
+        default=None,
+        help=(
+            "Directories containing compiled unroll DBs (npbench-unroll-*.db). "
+            "When used with --uncompiled-db-dirs, plots both on the same chart."
+        ),
+    )
+    parser.add_argument(
+        "--uncompiled-db-dirs",
+        nargs="+",
+        default=None,
+        help=(
+            "Directories containing uncompiled unroll DBs (npbench-unroll-*.db). "
+            "When used with --compiled-db-dirs, plots both on the same chart."
         ),
     )
     parser.add_argument(
@@ -816,7 +914,8 @@ def _parse_args() -> argparse.Namespace:
 def main() -> int:
     args = _parse_args()
 
-    multi_series = args.db_dirs is not None
+    compare_compiled = (args.compiled_db_dirs is not None) or (args.uncompiled_db_dirs is not None)
+    multi_series = (args.db_dirs is not None) or compare_compiled
 
     output_dir = Path(args.output_dir) / args.results_subdir
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -826,20 +925,39 @@ def main() -> int:
     resolved_benchmarks = _resolve_benchmark_args(args.benchmarks, bench_dir)
 
     if multi_series:
-        db_dirs = [Path(d) for d in args.db_dirs]
+        # Build the series list.
+        series_items: List[Tuple[Path, Optional[str], str]] = []
+        # Tuple: (dir, preset_override, kind)
+        if compare_compiled:
+            for d in list(args.compiled_db_dirs or []):
+                series_items.append((Path(d), None, "compiled"))
+            for d in list(args.uncompiled_db_dirs or []):
+                series_items.append((Path(d), None, "uncompiled"))
+            # Allow mixing legacy --db-dirs with the compare mode (treated as unknown).
+            for d in list(args.db_dirs or []):
+                series_items.append((Path(d), None, "unknown"))
+        else:
+            for d in list(args.db_dirs or []):
+                series_items.append((Path(d), None, "unknown"))
+
+        db_dirs = [d for d, _preset, _kind in series_items]
         for d in db_dirs:
             if not d.is_dir():
                 raise SystemExit(f"Not a directory: {d}")
         series_presets: List[Optional[str]]
         if args.series_presets is not None:
             if len(args.series_presets) != len(db_dirs):
-                raise SystemExit("--series-presets must match the length of --db-dirs")
+                raise SystemExit(
+                    "--series-presets must match the total number of series directories "
+                    "(from --db-dirs and/or --compiled-db-dirs/--uncompiled-db-dirs)"
+                )
             series_presets = list(args.series_presets)
         else:
             series_presets = [None] * len(db_dirs)
 
         series_to_per_db_medians: Dict[str, Dict[str, pd.DataFrame]] = {}
-        for d, preset_override in zip(db_dirs, series_presets):
+        series_to_kind: Dict[str, str] = {}
+        for (d, _unused_preset, kind), preset_override in zip(series_items, series_presets):
             inferred = _infer_preset_from_name(d.name)
             preset = preset_override or inferred or args.preset
             dbs: List[Path] = []
@@ -865,7 +983,13 @@ def main() -> int:
                 extra_frameworks=["jax_gpu"],
             )
             if per_db_medians:
-                series_to_per_db_medians[f"{d.name} ({preset})"] = per_db_medians
+                label_prefix = d.name
+                if kind in {"compiled", "uncompiled"}:
+                    label_prefix = f"{d.name} {kind}"
+                series_label = f"{label_prefix} ({preset})"
+                series_to_per_db_medians[series_label] = per_db_medians
+                if kind in {"compiled", "uncompiled"}:
+                    series_to_kind[series_label] = kind
 
         if not series_to_per_db_medians:
             raise SystemExit("No usable DBs found across --db-dirs; nothing to plot.")
@@ -888,6 +1012,7 @@ def main() -> int:
             speedup=(not args.runtime_scale),
             show_noncompiled=args.show_noncompiled,
             only_benchmarks=resolved_benchmarks,
+            series_to_kind=(series_to_kind if series_to_kind else None),
         )
     else:
         dbs = _discover_dbs(args.db_glob)
