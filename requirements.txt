@@ -3,3 +3,5 @@ numpy
 pandas
 pygount
 scipy
+torch
+jax          # jax[cuda_12] for GPU  

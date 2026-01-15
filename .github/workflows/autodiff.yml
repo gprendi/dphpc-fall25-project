@@ -31,4 +31,4 @@ jobs:
         run: uv sync
 
       - name: Run autodiff backprop benchmarks
-        run: ./run_autodiff_backprop.sh -f pytorch_cpu -p S -r 2
+        run: ./scripts/run_autodiff_backprop.sh -f pytorch_cpu -p S -r 2

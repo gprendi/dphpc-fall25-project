@@ -7,5 +7,5 @@ for unroll in $GRID
 do
     echo "Unroll factor: $unroll"
     UNROLL=$unroll TORCHINDUCTOR_FX_GRAPH_CACHE=1 \
-    uv run run_benchmark.py -b go_fast -f pytorch_cpu -m backward --validate True
+    uv run scripts/run_benchmark.py -b go_fast -f pytorch_cpu -m backward --validate True
 done
