@@ -3,6 +3,8 @@ Autodiff benchmarking for NPBench
 
 This repository starts from the NPBench project and keeps its data model and benchmark collection. For standard NPBench usage (framework matrix, quickstart, publication details), please refer to the upstream repo: https://github.com/spcl/npbench. The notes below focus only on the additions we made for reverse‑mode AD benchmarking of JAX and PyTorch plus the small helper scripts around databases and plotting.
 
+The work was completed in the context of ETH Zürich’s Design of Parallel and High-Performance Computing (DPHPC) course in 2025. The presentation (`DPHPC_JAXvsPyTorchAD.pdf`) in the repo walks through key results and takeaways of this project.
+
 Setup
 -----
 - Python 3.12+. Install dependencies and the local NPBench package:
