@@ -159,3 +159,5 @@ ad_logs/
 ad_plots/
 
 npbench.db
+
+*.db

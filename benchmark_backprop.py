@@ -6,30 +6,37 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 DEFAULT_FRAMEWORKS: Tuple[str, ...] = ("jax_cpu", "jax_gpu", "pytorch_cpu", "pytorch_gpu")
 DEFAULT_MODES: Tuple[str, ...] = ("backward", "forward")
-# Kernels with PyTorch autodiff implementations; serves as default bench set.
+# Kernels with PyTorch implementations; serves as default bench set.
 DEFAULT_BENCHMARKS: Tuple[str, ...] = (
-    "go_fast",
-    "heat_3d",
+    "atax",
+    "cholesky",
+    "cholesky2",
+    "compute",
+    "correlation",
+    "doitgen",
+    "durbin",
     "fdtd_2d",
-    # "k2mm",
-    # "k3mm",
-    # "atax",
-    # "go_fast",
-    # "gemm",
-    # "gemver",
-    # "gesummv",
-    # "mvt",
-    # "symm", -> torch loop
-    # "syr2k",
-    # "syrk",
-    # "trmm",
-    # "cholesky2",
-    # "compute",
-    # "doitgen",
-    # "hdiff",
-    # "jacobi_1d",
-    # "seidel_2d",
-    # "softmax",
+    "gemm",
+    "gemver",
+    "gesummv",
+    "go_fast",
+    "hdiff",
+    "heat_3d",
+    "jacobi_1d",
+    "jacobi_2d",
+    "k2mm",
+    "k3mm",
+    "lu",
+    "mvt",
+    "nbody",
+    "seidel_2d",
+    "softmax",
+    "stockham_fft",
+    "symm",
+    "syr2k",
+    "syrk",
+    "trisolv",
+    "trmm",
 )
 
 try:
@@ -153,7 +160,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("-r",
                         "--repeat",
                         type=int,
-                        default=5,
+                        default=10,
                         help="Number of repetitions per benchmark run.")
     parser.add_argument("-w",
                         "--warmup",

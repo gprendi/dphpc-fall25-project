@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Usage: ./run_autodiff_backprop.sh [options] [-- extra run_benchmark.py args]
+# Usage: ./scripts/run_autodiff_backprop.sh [options] [-- extra scripts/run_benchmark.py args]
 # Options:
 #   -f, --framework NAME    Framework to benchmark (default: ${FRAMEWORK})
 #   -p, --preset PRESET     NPBench preset S|M|L|paper (default: ${PRESET})
@@ -12,7 +12,8 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 MODES=("forward" "backward")
 FRAMEWORK="pytorch_cpu"
 PRESET="S"
@@ -20,6 +21,8 @@ REPEAT=2
 TIMEOUT=200
 VALIDATE="true"
 EXTRA_ARGS=()
+
+export PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
 if ! command -v uv >/dev/null 2>&1; then
     echo "Error: uv is required to run this script. Please install uv: https://docs.astral.sh/uv/" >&2
@@ -86,7 +89,7 @@ for mode in "${MODES[@]}"; do
     echo "Autodiff-enabled benchmarks (will run in $mode mode):"
     for bench in "${BENCHES[@]}"; do
         echo ">>> Running ${bench}..."
-        CMD=("${UV_PYTHON[@]}" "${REPO_ROOT}/run_benchmark.py"
+        CMD=("${UV_PYTHON[@]}" "${REPO_ROOT}/scripts/run_benchmark.py"
             -b "${bench}"
             -f "${FRAMEWORK}"
             -m "${mode}"

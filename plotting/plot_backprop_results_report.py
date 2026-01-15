@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import matplotlib.pyplot as plt
+from matplotlib import rcParams
 from matplotlib.colors import LogNorm
 import numpy as np
 import pandas as pd
@@ -24,9 +25,17 @@ ABBREV_RUNTIME_BARS = "rb"
 ABBREV_SPEEDUP_BARS = "sb"
 ABBREV_BOX = "bx"
 
+# Use a serif face for publication-ready plots and larger text.
+rcParams["font.family"] = "Nimbus Roman"
+rcParams["font.size"] = 16
+rcParams["axes.titlesize"] = 22
+rcParams["axes.labelsize"] = 18
+rcParams["xtick.labelsize"] = 18
+rcParams["ytick.labelsize"] = 20
+
 
 def _filename(prefix: str, mode: str, preset: str, benches: List[str],
-              scale: str = "") -> str:
+              scale: str = "", ext: str = "png") -> str:
     """
     Build filename like: prefix_mode_preset_k1_k2[...], with optional scale suffix.
     """
@@ -34,69 +43,7 @@ def _filename(prefix: str, mode: str, preset: str, benches: List[str],
     parts = [prefix, mode, preset, kernels]
     if scale:
         parts.append(scale)
-    return "_".join(parts) + ".png"
-
-def _plot_stacked_bars(
-    benches, frameworks, forward_times, backward_times,
-    labels, output_path, use_logscale, ylabel_suffix
-):
-    """
-    Shared helper for absolute and speedup bar plots.
-    `forward_times` and `backward_times` must already contain the values to plot.
-    """
-
-    x = np.arange(len(benches))
-    width = 0.8 / max(1, len(frameworks))
-    cmap = plt.get_cmap("tab10")
-
-    fig, ax = plt.subplots(figsize=(max(8, len(benches) * 0.6), 6))
-
-    # For building a clean legend: one entry per framework only
-    legend_handles = []
-    legend_labels = []
-
-    for f_idx, framework in enumerate(frameworks):
-        centers = x + (f_idx - (len(frameworks) - 1) / 2) * width
-
-        fw_vals = [forward_times.get((bench, framework), np.nan) for bench in benches]
-        bw_vals = [backward_times.get((bench, framework), np.nan) for bench in benches]
-
-        color = cmap(f_idx % cmap.N)
-
-        # Full backward runtime = dark transparent
-        h1 = ax.bar(
-            centers,
-            bw_vals,
-            width=width,
-            color=color,
-            alpha=0.6,
-        )
-        # Forward portion = opaque
-        ax.bar(
-            centers,
-            fw_vals,
-            width=width,
-            color=color,
-            alpha=1.0,
-        )
-
-        # Only add one legend entry per framework
-        legend_handles.append(h1)
-        legend_labels.append(framework.replace("_", " ").title())
-
-    ax.set_ylabel(f"Backward runtime {ylabel_suffix}\n(forward = solid lower part)")
-    ax.set_xticks(x)
-    ax.set_xticklabels([labels.get(b, b) for b in benches], rotation=30, ha="right")
-    ax.legend(legend_handles, legend_labels, ncol=2)
-
-    if use_logscale:
-        ax.set_yscale("log")
-
-    ax.grid(axis="y", linestyle="--", alpha=0.4)
-
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=300)
-    plt.close(fig)
+    return "_".join(parts) + f".{ext}"
 
 
 def my_round(value: float, width: int) -> str:
@@ -128,7 +75,14 @@ def my_runtime_abbr(value: float) -> str:
         return ""
     # Input is in seconds; show milliseconds as whole numbers.
     ms = int(round(value * 1000))
-    return f"{ms} ms"
+    return f"{ms}ms"
+
+
+def my_mad_superscript(mad_pct: float) -> str:
+    if mad_pct is None or math.isnan(mad_pct):
+        return ""
+    # Use mathtext superscript to keep the variance small and unobtrusive.
+    return f"$^{{({my_round(mad_pct, 0)})}}$"
 
 
 def load_benchmark_labels(bench_dir: Path) -> Dict[str, str]:
@@ -138,12 +92,13 @@ def load_benchmark_labels(bench_dir: Path) -> Dict[str, str]:
             payload = json.load(handle)
         bench = payload.get("benchmark", {})
         short_name = bench.get("short_name", path.stem)
-        labels[short_name] = bench.get("name", short_name)
+        # Prefer concise kernel handles (e.g., k2mm) over descriptive long names.
+        labels[short_name] = path.stem
     return labels
 
 
 def fetch_results(presets: List[str], frameworks: List[str]) -> pd.DataFrame:
-    conn = util.create_connection("dbs/cholesky2M.db")
+    conn = util.create_connection("dbs/linear_algebra_full2.db")
     placeholders = ",".join("?" for _ in presets)
     try:
         data = pd.read_sql_query(
@@ -188,14 +143,35 @@ def select_best_runs(results: pd.DataFrame
     filtered["time_ms"] = filtered["time"] * 1000.0
     medians = (
         filtered.groupby(["benchmark", "framework", "mode"],
-                         dropna=False).agg(time=("time", "median")).reset_index())
+                         dropna=False).agg(
+                             time=("time", "median"),
+                             mad=("time",
+                                  lambda s: np.median(np.abs(
+                                      s - np.median(s))))
+                         ).reset_index())
     medians["time_ms"] = medians["time"] * 1000.0
+    medians["mad_ms"] = medians["mad"] * 1000.0
+    medians["mad_pct"] = np.where(
+        medians["time"] > 0, medians["mad"] / medians["time"] * 100, np.nan
+    )
     return medians, filtered
 
 
 def _ordered_benchmarks(medians: pd.DataFrame,
-                        labels: Dict[str, str]) -> List[str]:
+                        labels: Dict[str, str],
+                        bench_order: List[str] = None) -> List[str]:
     benches = sorted(medians["benchmark"].unique())
+    if bench_order:
+        available = set(benches)
+        ordered: List[str] = []
+        seen = set()
+        for b in bench_order:
+            if b in available and b not in seen:
+                ordered.append(b)
+                seen.add(b)
+        remaining = [b for b in benches if b not in seen]
+        remaining.sort(key=lambda b: labels.get(b, b))
+        return ordered + remaining
     benches.sort(key=lambda b: labels.get(b, b))
     return benches
 
@@ -208,10 +184,14 @@ def _pivot_times(medians: pd.DataFrame) -> pd.DataFrame:
 
 def plot_speedup_heatmap(medians: pd.DataFrame, labels: Dict[str, str],
                          frameworks: List[str], baseline: str, preset: str,
-                         output_dir: Path, hide_bench_labels: bool = False):
+                         output_dir: Path, hide_bench_labels: bool = False,
+                         bench_order: List[str] = None,
+                         output_format: str = "png"):
 
     pivot = _pivot_times(medians)
-    benches = _ordered_benchmarks(medians, labels)
+    benches = _ordered_benchmarks(medians, labels, bench_order)
+    bench_labels = [labels.get(b, b) for b in benches]
+    mad_lookup = medians.set_index(["benchmark", "framework", "mode"])["mad_pct"]
 
     # Compute ratio tables
     ratio_tables = {}
@@ -224,17 +204,14 @@ def plot_speedup_heatmap(medians: pd.DataFrame, labels: Dict[str, str],
         ratio_tables[mode] = pd.DataFrame(ratios).reindex(benches)
         baseline_times[mode] = base.reindex(benches)
 
-    # ----- helper to plot one mode -----
-    def _plot_single(mode: str, df: pd.DataFrame, base_times: pd.Series):
-        fig_width = max(6, len(frameworks) * 1.4)
-        fig_height = max(4, len(benches) * 0.5)
+    norm = LogNorm(vmin=0.5, vmax=2.0)
 
-        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-
+    def _render_heatmap(ax, mode: str, df: pd.DataFrame, base_times: pd.Series,
+                        *, show_ylabel: bool):
         im = ax.imshow(
             df.to_numpy(),
             cmap="RdYlGn",
-            norm=LogNorm(vmin=0.5, vmax=2.0),   # log scale
+            norm=norm,   # log scale
             aspect="auto"
         )
 
@@ -244,154 +221,84 @@ def plot_speedup_heatmap(medians: pd.DataFrame, labels: Dict[str, str],
             ax.set_yticklabels([])
         else:
             ax.set_yticks(np.arange(len(benches)))
-            ax.set_yticklabels([labels.get(b, b) for b in benches])
+            if show_ylabel:
+                ax.set_yticklabels(bench_labels, rotation=40, ha="right", va="center")
+            else:
+                ax.set_yticklabels([])
         ax.set_xticks(np.arange(len(frameworks)))
         ax.set_xticklabels(
             [FRAMEWORK_DISPLAY.get(fw, fw.replace("_", " ").title()) for fw in frameworks],
-            rotation=30, ha="right"
+            rotation=40, ha="right"
         )
+        ax.set_title(f"{mode.title()} Speedup")
 
         # Add ratio text (abbreviated)
         for i, bench in enumerate(benches):
             for j, framework in enumerate(frameworks):
                 value = df.iloc[i, j]
                 label = my_speedup_abbr(value)
+                mad_pct = mad_lookup.get((bench, framework, mode), np.nan)
+                suffix = my_mad_superscript(mad_pct)
                 if framework == baseline:
                     runtime_ms = base_times.iloc[i]
                     label = ""
                     if not math.isnan(runtime_ms):
                         label = my_runtime_abbr(runtime_ms / 1000.0)
+                    label += suffix
+                else:
+                    label += suffix
                 ax.text(
                     j, i, label,
                     ha="center", va="center", color="black"
                 )
+        return im
+
+    # ----- helper to plot one mode -----
+    def _plot_single(mode: str, df: pd.DataFrame, base_times: pd.Series):
+        fig_width = max(5, len(frameworks) * 1.05)
+        fig_height = max(4, len(benches) * 0.5)
+
+        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+        im = _render_heatmap(ax, mode, df, base_times, show_ylabel=True)
 
         fig.tight_layout()
-        filename = _filename(ABBREV_SPEEDUP_HEATMAP, mode, preset, benches)
+        filename = _filename(ABBREV_SPEEDUP_HEATMAP, mode, preset, benches,
+                             ext=output_format)
         fig.savefig(output_dir / filename, dpi=300)
         plt.close(fig)
 
-    # ----- generate 2 separate PNGs -----
-    _plot_single("forward", ratio_tables["forward"], baseline_times["forward"])
-    _plot_single("backward", ratio_tables["backward"], baseline_times["backward"])
+    def _plot_combined():
+        # Wider cells (more horizontal) and tighter spacing between the two heatmaps.
+        fig_width = max(9.0, len(frameworks) * 2.6)
+        fig_height = max(3.6, len(benches) * 0.9)
+        fig, axes = plt.subplots(
+            1,
+            2,
+            figsize=(fig_width, fig_height),
+            sharey=True,
+            gridspec_kw={"wspace": 0.01},
+        )
+        fig.subplots_adjust(left=0.1, right=0.88, top=0.9, bottom=0.23, wspace=0.01)
 
+        _render_heatmap(axes[0], "forward", ratio_tables["forward"],
+                        baseline_times["forward"], show_ylabel=True)
+        im = _render_heatmap(axes[1], "backward", ratio_tables["backward"],
+                             baseline_times["backward"],
+                             show_ylabel=not hide_bench_labels)
 
-def plot_runtime_bars(medians: pd.DataFrame, labels: Dict[str, str],
-                      frameworks: List[str], preset: str, output_dir: Path):
+        # Place colorbar to the far right to avoid squeezing the plots.
+        cax = fig.add_axes([0.89, 0.23, 0.015, 0.67])
+        cbar = fig.colorbar(im, cax=cax)
+        filename = _filename(ABBREV_SPEEDUP_HEATMAP, "both", preset, benches,
+                             ext=output_format)
+        fig.savefig(output_dir / filename, dpi=300)
+        plt.close(fig)
 
-    benches = _ordered_benchmarks(medians, labels)
+    # ----- generate 3 PNGs -----
+    # _plot_single("forward", ratio_tables["forward"], baseline_times["forward"])
+    # _plot_single("backward", ratio_tables["backward"], baseline_times["backward"])
+    _plot_combined()
 
-    forward_times = medians[medians["mode"] == "forward"].set_index(
-        ["benchmark", "framework"])["time_ms"]
-
-    backward_times = medians[medians["mode"] == "backward"].set_index(
-        ["benchmark", "framework"])["time_ms"]
-
-    # Linear scale
-    rb_linear = _filename(ABBREV_RUNTIME_BARS, "both", preset, benches, "lin")
-    _plot_stacked_bars(
-        benches, frameworks, forward_times, backward_times,
-        labels, output_dir / rb_linear,
-        use_logscale=False,
-        ylabel_suffix="(ms)"
-    )
-
-    # Log scale
-    rb_log = _filename(ABBREV_RUNTIME_BARS, "both", preset, benches, "log")
-    _plot_stacked_bars(
-        benches, frameworks, forward_times, backward_times,
-        labels, output_dir / rb_log,
-        use_logscale=True,
-        ylabel_suffix="(ms, log scale)"
-    )
-
-def plot_speedup_bars(medians: pd.DataFrame, labels: Dict[str, str],
-                      frameworks: List[str], baseline: str, preset: str,
-                      output_dir: Path):
-
-    benches = _ordered_benchmarks(medians, labels)
-
-    fw = medians[medians["mode"] == "forward"].set_index(
-        ["benchmark", "framework"])["time_ms"]
-    bw = medians[medians["mode"] == "backward"].set_index(
-        ["benchmark", "framework"])["time_ms"]
-
-    # Compute speedup relative to baseline
-    forward_speedup = {}
-    backward_speedup = {}
-
-    for bench in benches:
-        f_base = fw.get((bench, baseline), np.nan)
-        b_base = bw.get((bench, baseline), np.nan)
-        for fwk in frameworks:
-            f_val = fw.get((bench, fwk), np.nan)
-            b_val = bw.get((bench, fwk), np.nan)
-            forward_speedup[(bench, fwk)] = f_base / f_val if f_val > 0 else np.nan
-            backward_speedup[(bench, fwk)] = b_base / b_val if b_val > 0 else np.nan
-
-    forward_speedup_series = pd.Series(forward_speedup)
-    backward_speedup_series = pd.Series(backward_speedup)
-
-    # Linear scale
-    sb_linear = _filename(ABBREV_SPEEDUP_BARS, "both", preset, benches, "lin")
-    _plot_stacked_bars(
-        benches, frameworks,
-        forward_speedup_series, backward_speedup_series,
-        labels, output_dir / sb_linear,
-        use_logscale=False,
-        ylabel_suffix=f"(speedup vs. {baseline})"
-    )
-
-    # Log scale
-    sb_log = _filename(ABBREV_SPEEDUP_BARS, "both", preset, benches, "log")
-    _plot_stacked_bars(
-        benches, frameworks,
-        forward_speedup_series, backward_speedup_series,
-        labels, output_dir / sb_log,
-        use_logscale=True,
-        ylabel_suffix=f"(speedup vs. {baseline}, log scale)"
-    )
-
-
-def plot_runtime_boxplots(filtered: pd.DataFrame, frameworks: List[str],
-                          preset: str, output_dir: Path):
-    cmap = plt.get_cmap("tab10")
-    fig, axes = plt.subplots(1,
-                             len(EXEC_MODES),
-                             figsize=(max(6, len(frameworks) * 1.2), 4),
-                             sharey=True)
-    for idx, mode in enumerate(EXEC_MODES):
-        ax = axes[idx]
-        ax.set_title(f"{mode.title()} runtimes")
-        data = []
-        labels = []
-        colors = []
-        for f_idx, framework in enumerate(frameworks):
-            subset = filtered[(filtered["framework"] == framework)
-                              & (filtered["mode"] == mode)]
-            if subset.empty:
-                continue
-            data.append(subset["time_ms"].to_numpy())
-            labels.append(FRAMEWORK_DISPLAY.get(framework,
-                                                framework.replace("_", " ").title()))
-            colors.append(cmap(f_idx % cmap.N))
-        if not data:
-            continue
-        bp = ax.boxplot(data,
-                        tick_labels=labels,
-                        showfliers=False,
-                        patch_artist=True)
-        for patch, color in zip(bp["boxes"], colors):
-            patch.set_facecolor(color)
-            patch.set_alpha(0.7)
-        ax.set_yscale("log")
-        ax.set_ylabel("Runtime (ms)")
-        ax.grid(axis="y", linestyle="--", alpha=0.3)
-    fig.tight_layout()
-    filename = _filename(ABBREV_BOX, "both", preset,
-                         sorted(filtered["benchmark"].unique()))
-    fig.savefig(output_dir / filename, dpi=300)
-    plt.close(fig)
 
 
 
@@ -411,6 +318,10 @@ def main():
                         "--output-dir",
                         default="ad_plots",
                         help="Directory for generated figures.")
+    parser.add_argument("--format",
+                        default="eps",
+                        choices=["png", "eps", "pdf", "svg"],
+                        help="Output figure format/extension.")
     parser.add_argument("-f",
                         "--frameworks",
                         nargs="+",
@@ -431,6 +342,7 @@ def main():
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    output_format = args.format
     labels = load_benchmark_labels(Path("bench_info"))
     frameworks = args.frameworks
     if args.baseline not in frameworks:
@@ -443,11 +355,13 @@ def main():
         raise SystemExit("--preset count must match --benchmarks count when providing multiple presets.")
 
     raw_results = fetch_results(preset_args, frameworks)
+    bench_order: List[str] = None
 
     # Optional benchmark filtering with simple alias support (strip leading 'k')
     if args.benchmarks:
         available = set(raw_results["benchmark"].unique())
         bench_preset_pairs = []
+        bench_order = []
         for idx, b in enumerate(args.benchmarks):
             target = b
             if target not in available and target.startswith("k"):
@@ -456,6 +370,7 @@ def main():
                     target = alt
             preset_val = preset_args[0] if len(preset_args) == 1 else preset_args[idx]
             bench_preset_pairs.append((b, target, preset_val))
+            bench_order.append(target)
 
         mask = None
         missing = []
@@ -472,6 +387,9 @@ def main():
             raw_results = raw_results.iloc[0:0]
         else:
             raw_results = raw_results[mask]
+            if bench_order:
+                present = set(raw_results["benchmark"].unique())
+                bench_order = [b for b in bench_order if b in present]
         if missing:
             print(f"Warning: no data for requested benchmarks: {', '.join(missing)}")
 
@@ -482,11 +400,8 @@ def main():
 
     medians, filtered = select_best_runs(raw_results)
     plot_speedup_heatmap(medians, labels, frameworks, args.baseline, preset_label,
-                         output_dir, hide_bench_labels=args.hide_bench_labels)
-    # plot_runtime_bars(medians, labels, frameworks, preset_label, output_dir)
-    # plot_speedup_bars(medians, labels, frameworks, args.baseline, preset_label,
-    #                   output_dir)
-    # plot_runtime_boxplots(filtered, frameworks, preset_label, output_dir)
+                         output_dir, hide_bench_labels=args.hide_bench_labels,
+                         bench_order=bench_order, output_format=output_format)
 
 
 if __name__ == "__main__":
