@@ -1,198 +1,53 @@
-<img src="npbench.svg" alt="npbench-logo" width="100"/>
-<h1>NPBench</h1>
+Autodiff benchmarking for NPBench
+==================================
 
-## Quickstart
+This repository starts from the NPBench project and keeps its data model and benchmark collection. For standard NPBench usage (framework matrix, quickstart, publication details), please refer to the upstream repo: https://github.com/spcl/npbench. The notes below focus only on the additions we made for reverse‑mode AD benchmarking of JAX and PyTorch plus the small helper scripts around databases and plotting.
 
-To install NPBench, simply execute:
-
-```
-python -m pip install -r requirements.txt
-python -m pip install .
-```
-
-You can then run a subset of the benchmarks with NumPy, Numba, and DaCe and plot
-the speedup of DaCe and Numba against NumPy:
-
-``` bash
-python -m pip install numba
-python -m pip install dace
-python quickstart.py
-python plot_results.py
-```
-
-## Supported Frameworks
-
-Currently, the following frameworks are supported (in alphabetical order):
-- CuPy
-- DaCe
-- Dpnp
-- JAX
-- Numba
-- NumPy
-- Pythran
-
-Support will also be added shortly for:
-- Legate
-
-Please note that the NPBench setup only installs NumPy.
-To run benchmarks with other frameworks, you have to install them separately.
-Below, we provide some tips about installing each of the above frameworks:
-
-### CuPy
-
-If you already have CUDA installed, then you can install CuPy with pip:
-```
-python -m pip install cupy-cuda<version>
-```
-For example, if you have CUDA 11.1, then you should install CuPy with:
-```
-python -m pip install cupy-cuda111
-```
-For more installation options, consult the CuPy [installation guide](https://docs.cupy.dev/en/stable/install.html#install-cupy).
-
-### DaCe
-
-DaCe can be install with pip:
-```
-python -m pip install dace
-```
-However, you may want to install the latest version from the [GitHub repository](https://github.com/spcl/dace).
-To run NPBench with DaCe, you have to select as framework (see details below)
-either `dace_cpu` or `dace_gpu`.
-
-### DPNP
-
-With `dpnp` it is strongly recommended to use `conda` instead of `pip` for its dependency on intel packages. 
-Refer to this 
-[LINK](https://intelpython.github.io/dpnp/quick_start_guide.html#building-for-custom-sycl-targets) to know more 
-about building custom SYCL targets or installing `dpnp` package from the `intel` channel.
-
-Unlike the pip installation, with conda it is advisable to try installing all packages at once.
-Edit the `environment.yml` to include packages and optional dependencies (e.g. hardware-dependent frameworks
-or utilities such as `ipython`). Then type:
-
-``` bash
-$ conda env create -f environment.yml    # environment.yml contains all the right dependencies
-$ conda activate npb              # Activate the environment
-$ python -m pip install pygount          # Only dependency not distributed with conda
-```
-
-To run NPBench with dpnp, You must select as framework, either `dpnp_cpu` or `dpnp_gpu`, depending on your hardware. See details below.
-
-_DPNP only contains a subset of the benchmarks, selected on interest and best-effort basis._
-
-### Jax
-
-JAX can be installed with pip:
-- CPU-only (Linux/macOS/Windows)
-    ```sh
-    pip install -U jax
-    ```
-- GPU (NVIDIA, CUDA 12)
-    ```sh
-    pip install -U "jax[cuda12]"
-    ```
-- TPU (Google Cloud TPU VM)
-  ```sh
-  pip install -U "jax[tpu]" -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+Setup
+-----
+- Python 3.12+. Install dependencies and the local NPBench package:
   ```
-For more installation options, please consult the JAX [installation guide](https://jax.readthedocs.io/en/latest/installation.html#installation).
+  python -m pip install -r requirements.txt
+  python -m pip install -e .
+  ```
+- GPU runs assume matching CUDA/CuDNN builds of JAX and PyTorch.
 
-### Numba
+Running backprop benchmarks
+---------------------------
+- Discover kernels that define autodiff metadata:
+  ```
+  python benchmark_backprop.py --list-benchmarks
+  ```
+- Run forward + backward for one kernel/framework (defaults: all autodiff kernels, jax/pytorch CPU+GPU, modes = forward+backward, preset S):
+  ```
+  python benchmark_backprop.py -b gemm -f pytorch_gpu -m backward -p L -r 5 --timeout 400
+  ```
+  Useful flags: `--validate false` to skip correctness checks, `--baseline-framework jax_cpu` to pick the backward validator, `--strict-frameworks` to abort on missing frameworks.
+- Batch helper: `./scripts/run_autodiff_backprop.sh -f pytorch_gpu -p S` (uses `uv run` under the hood and walks all autodiff-enabled kernels in both forward and backward mode).
+- Outputs land in the standard NPBench SQLite database `npbench.db` with both timing results and line counts.
 
-Numba can be installed with pip:
-```
-python -m pip install numba
-```
-If you use Anaconda on an Intel-based machine, then you can install an optimized version of Numba that uses Intel SVML:
-```
-conda install -c numba icc_rt
-```
-For more installation options, please consult the Numba [installation guide](https://numba.readthedocs.io/en/stable/user/installing.html).
+Managing result databases
+-------------------------
+- Export a DB (tables -> CSV) to `dbs/exports/`:
+  ```
+  python dbs/export_db_to_csv.py
+  ```
+- Merge two NPBench-format DBs into a fresh file:
+  ```
+  python dbs/merge_dbs.py dbs/linear_algebra.db dbs/pat1M_gpu.db dbs/combined.db --overwrite
+  ```
+- The repo also ships several precomputed `.db` files under `dbs/` for convenience when plotting.
 
-### Pythran
+Plotting
+--------
+- Generate the main backward/forward plots (heatmap + stacked bars) from `npbench.db`:
+  ```
+  python plotting/plot_backprop_results.py -p L -f jax_cpu jax_gpu pytorch_cpu pytorch_gpu -o ad_plots
+  ```
+  Pass `-k` to focus on specific kernels or multiple `-p` values to mix presets per kernel.
+- Additional figure scripts live in `plotting/` for report-specific visuals (heatmaps, unroll sweeps, paper LU/Cholesky). Each script documents its own flags; they all read NPBench-format SQLite DBs.
 
-Pythran can be install with pip and Anaconda. For detailed installation options, please consult the Pythran [installation guide](https://pythran.readthedocs.io/en/latest/).
-
-
-## Running benchmarks
-
-To run individual bencharks, you can use the `run_benchmark` script:
-```
-python run_benchmark.py -b <benchmark> -f <framework>
-```
-The available benchmarks are listed in the `bench_info` folder.
-The supported frameworks are listed in the `framework_info` folder.
-Please use the corresponding JSON filenames.
-For example, to run `adi` with NumPy, execute the following:
-```
-python run_benchmark.py -b adi -f numpy
-```
-You can run all the available benchmarks with a specific framework using the `run_framework` script:
-```
-python run_framework.py -f <framework>
-```
-
-### Presets
-
-Each benchmark has four different presets; `S`, `M`, `L`, and `paper`.
-The `S`, `M`, and `L` presets have been selected so that NumPy finishes execution
-in about 10, 100, and 1000ms respectively in a machine with two 16-core Intel Xeon
-Gold 6130 processors.
-Exception to that are `atax`, `bicg`, `mlp`, `mvt`, and `trisolv`, which have been
-tuned for 5, 20 and 100ms approximately due to very high memory requirements.
-The `paper` preset is the problem sizes used in the NPBench [paper](http://spcl.inf.ethz.ch/Publications/index.php?pub=412).
-By default, the provided python scripts execute the benchmarks using the `S` preset.
-You can select a different preset with the optional `-p` flag:
-```
-python run_benchmark.py -b gemm -f numpy -p L
-```
-
-### Visualization
-
-After running some benchmarks with different frameworks, you can generate plots
-of the speedups and line-count differences (experimental) against NumPy:
-```
-python plot_results.py
-python plot_lines.py
-```
-
-## Customization
-
-It is possible to use the NPBench infrastructure with your own benchmarks and frameworks.
-For more information on this functionality please read the documentation for [benchmarks](benchmarks.md) and [frameworks](frameworks.md).
-
-## Publication
-
-Please cite NPBench as follows:
-
-```bibtex
-@inproceedings{
-    npbench,
-    author = {Ziogas, Alexandros Nikolaos and Ben-Nun, Tal and Schneider, Timo and Hoefler, Torsten},
-    title = {NPBench: A Benchmarking Suite for High-Performance NumPy},
-    year = {2021},
-    publisher = {Association for Computing Machinery},
-    address = {New York, NY, USA},
-    url = {https://doi.org/10.1145/3447818.3460360},
-    doi = {10.1145/3447818.3460360},
-    booktitle = {Proceedings of the ACM International Conference on Supercomputing},
-    series = {ICS '21}
-}
-```
-
-## Acknowledgements
-
-NPBench is a collection of scientific Python/NumPy codes from various domains that we adapted from the following sources:
-- Azimuthal Integration from [pyFAI](https://github.com/silx-kit/pyFAI)
-- Navier-Stokes from  [CFD Python](https://github.com/barbagroup/CFDPython)
-- Cython [tutorial](https://cython.readthedocs.io/en/latest/src/userguide/numpy_tutorial.html) for NumPy users
-- Quantum Transport simulation from [OMEN](https://nano-tcad.ee.ethz.ch/research/computational-nanoelectronics.html)
-- CRC-16-CCITT algorithm from [oysstu](https://gist.github.com/oysstu/68072c44c02879a2abf94ef350d1c7c6)
-- Numba [tutorial](https://numba.readthedocs.io/en/stable/user/5minguide.html)
-- Mandelbrot codes [From Python to Numpy](https://github.com/rougier/from-python-to-numpy)
-- N-Body simulation from [nbody-python](https://github.com/pmocz/nbody-python)
-- [PolyBench/C](http://web.cse.ohio-state.edu/~pouchet.2/software/polybench/)
-- Pythran [benchmarks](https://github.com/serge-sans-paille/numpy-benchmarks/)
-- [Stockham-FFT](http://urn.kb.se/resolve?urn=urn:nbn:se:kth:diva-287731)
-- Weather stencils from [gt4py](https://github.com/GridTools/gt4py)
+Notes on upstream NPBench
+-------------------------
+- Benchmark definitions live in `bench_info/`; framework metadata in `framework_info/`.
+- You can still run the original NPBench harness via `scripts/run_benchmark.py` or `scripts/run_framework.py`. See the upstream README for full details and publication references.
