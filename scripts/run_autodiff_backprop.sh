@@ -22,6 +22,8 @@ TIMEOUT=200
 VALIDATE="true"
 EXTRA_ARGS=()
 
+export PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
+
 if ! command -v uv >/dev/null 2>&1; then
     echo "Error: uv is required to run this script. Please install uv: https://docs.astral.sh/uv/" >&2
     exit 1
