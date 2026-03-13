@@ -21,6 +21,13 @@
         },
         "input_args": ["nx", "ny", "nt", "nit", "u", "v", "dt", "dx", "dy", "p", "rho", "nu"],
         "array_args": ["u", "v", "p"],
-        "output_args": ["u", "v", "p"]
+        "output_args": ["u", "v", "p"],
+        "autodiff": {
+            "loss": {
+                "type": "sum",
+                "target": "result"
+            },
+            "grad_inputs": ["u", "v", "p"]
+        }
     }
 }
